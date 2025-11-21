@@ -12,7 +12,6 @@ function App() {
   const [currentStep, setCurrentStep] = useState<AppStep>('scenario-selection')
   const [selectedScenario, setSelectedScenario] = useState<Scenario | null>(null)
   const [customerAudioBlob, setCustomerAudioBlob] = useState<Blob | null>(null)
-  const [userAudioBlob, setUserAudioBlob] = useState<Blob | null>(null)
   const [transcribedText, setTranscribedText] = useState<string>('')
   const [feedback, setFeedback] = useState<Feedback['feedback_json'] | null>(null)
   const [loading, setLoading] = useState(false)
@@ -68,7 +67,6 @@ function App() {
   }
 
   const handleRecordingComplete = async (audioBlob: Blob, shouldEndConversation: boolean = false) => {
-    setUserAudioBlob(audioBlob)
     setCurrentStep('transcribing')
     setLoading(true)
     setError(null)
@@ -143,16 +141,38 @@ function App() {
     }
   }
 
-  const handleEndConversation = () => {
+  const handleEndConversation = async () => {
     setIsConversationEnded(true)
     // 다음 녹음 완료 시 자동으로 피드백으로 이동
+    // 현재 녹음된 오디오가 있다면 즉시 처리
+    if (conversationHistory.length > 0 && conversationHistory[conversationHistory.length - 1].role === 'user') {
+      // 이미 사용자 응대가 있으면 피드백으로 이동
+      const lastUserTurn = conversationHistory[conversationHistory.length - 1]
+      if (sessionId && selectedScenario) {
+        setCurrentStep('analyzing')
+        setLoading(true)
+        try {
+          const feedbackData = await analyzeResponse(
+            selectedScenario.context,
+            conversationHistory
+          )
+          setFeedback(feedbackData)
+          const response = await createResponse(sessionId, undefined, lastUserTurn.text)
+          await createFeedback(response.id, feedbackData)
+          setCurrentStep('feedback')
+        } catch (err) {
+          setError(err instanceof Error ? err.message : '피드백 생성 중 오류가 발생했습니다.')
+        } finally {
+          setLoading(false)
+        }
+      }
+    }
   }
 
   const handleReset = () => {
     setCurrentStep('scenario-selection')
     setSelectedScenario(null)
     setCustomerAudioBlob(null)
-    setUserAudioBlob(null)
     setTranscribedText('')
     setFeedback(null)
     setError(null)

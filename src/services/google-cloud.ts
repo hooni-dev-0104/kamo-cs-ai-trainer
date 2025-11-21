@@ -1,5 +1,4 @@
 const GOOGLE_CLOUD_API_KEY = import.meta.env.VITE_GOOGLE_CLOUD_API_KEY
-const GOOGLE_CLOUD_PROJECT_ID = import.meta.env.VITE_GOOGLE_CLOUD_PROJECT_ID
 
 if (!GOOGLE_CLOUD_API_KEY) {
   throw new Error('Missing Google Cloud API key')
