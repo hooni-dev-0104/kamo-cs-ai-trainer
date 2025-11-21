@@ -1,0 +1,38 @@
+{
+  "name": "kamo-cs-trainer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hooni-dev-0104/kamo-cs-trainer.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/hooni-dev-0104/kamo-cs-trainer/issues"
+  },
+  "homepage": "https://github.com/hooni-dev-0104/kamo-cs-trainer#readme",
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.6",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "autoprefixer": "^10.4.22",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.18",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.4"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.84.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  }
+}
