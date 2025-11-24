@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Scenario, AppStep, Feedback, ConversationTurn } from './types'
 import ScenarioSelector from './components/ScenarioSelector'
 import VoicePlayer from './components/VoicePlayer'
@@ -21,6 +21,79 @@ function App() {
   const [currentTurn, setCurrentTurn] = useState<number>(0)
   const [isConversationEnded, setIsConversationEnded] = useState(false)
   const [customerVoice, setCustomerVoice] = useState<string>('ko-KR-Neural2-A') // 랜덤으로 선택된 고객 목소리
+  const stepHistoryRef = useRef<AppStep[]>(['scenario-selection']) // 단계 히스토리 추적
+  const isNavigatingBackRef = useRef(false) // 뒤로 가기 중인지 추적
+
+  // 브라우저 뒤로 가기 처리
+  useEffect(() => {
+    const handlePopState = () => {
+      if (stepHistoryRef.current.length > 1) {
+        isNavigatingBackRef.current = true
+        // 이전 단계로 이동
+        stepHistoryRef.current.pop() // 현재 단계 제거
+        const previousStep = stepHistoryRef.current[stepHistoryRef.current.length - 1]
+        
+        // 이전 단계로 복원 (로딩 중인 단계는 건너뛰고 실제 상호작용 가능한 단계로)
+        if (previousStep === 'scenario-selection') {
+          handleReset()
+        } else if (previousStep === 'listening' && customerAudioBlob) {
+          setCurrentStep('listening')
+        } else if (previousStep === 'recording') {
+          setCurrentStep('recording')
+        } else if (previousStep === 'feedback' && feedback) {
+          setCurrentStep('feedback')
+        } else if (['transcribing', 'generating-response', 'analyzing'].includes(previousStep)) {
+          // 로딩 단계는 recording으로 이동
+          if (conversationHistory.length > 0) {
+            setCurrentStep('recording')
+          } else if (customerAudioBlob) {
+            setCurrentStep('listening')
+          } else {
+            setCurrentStep('scenario-selection')
+          }
+        } else {
+          setCurrentStep(previousStep)
+        }
+        
+        isNavigatingBackRef.current = false
+      } else {
+        // 히스토리가 없으면 처음으로
+        handleReset()
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [customerAudioBlob, feedback, conversationHistory])
+
+  // 단계 변경 시 히스토리 업데이트
+  useEffect(() => {
+    if (!isNavigatingBackRef.current) {
+      // 뒤로 가기가 아닐 때만 히스토리 추가
+      const currentHistory = stepHistoryRef.current
+      const lastStep = currentHistory[currentHistory.length - 1]
+      
+      if (currentStep !== lastStep) {
+        // 새 단계를 히스토리에 추가
+        stepHistoryRef.current = [...currentHistory, currentStep]
+        // 브라우저 히스토리에 추가
+        window.history.pushState({ step: currentStep }, '', `#${currentStep}`)
+      }
+    }
+  }, [currentStep])
+
+  // 초기 히스토리 설정
+  useEffect(() => {
+    if (window.location.hash) {
+      const hashStep = window.location.hash.slice(1) as AppStep
+      if (['scenario-selection', 'listening', 'recording', 'transcribing', 'generating-response', 'analyzing', 'feedback'].includes(hashStep)) {
+        // 페이지 로드 시 해시가 있으면 해당 단계로 이동하지 않음 (보안상 이유)
+        window.history.replaceState({ step: 'scenario-selection' }, '', '#')
+      }
+    } else {
+      window.history.replaceState({ step: 'scenario-selection' }, '', '#')
+    }
+  }, [])
 
   const handleScenarioSelect = async (scenario: Scenario) => {
     setSelectedScenario(scenario)
@@ -181,6 +254,8 @@ function App() {
     setCurrentTurn(0)
     setIsConversationEnded(false)
     setCustomerVoice('ko-KR-Neural2-A') // 초기화
+    stepHistoryRef.current = ['scenario-selection'] // 히스토리 초기화
+    window.history.replaceState({ step: 'scenario-selection' }, '', '#')
   }
 
   return (
