@@ -41,6 +41,9 @@ jobs:
     needs: build-check
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      deployments: write
     
     steps:
       - name: Checkout code
@@ -70,6 +73,21 @@ jobs:
           echo "project_id=$PROJECT_ID" >> $GITHUB_OUTPUT
           echo "Found Vercel Project ID: $PROJECT_ID"
 
+      - name: Get GitHub Repository ID
+        id: github-repo
+        run: |
+          REPO_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}" | \
+            jq -r '.id')
+          
+          if [ -z "$REPO_ID" ] || [ "$REPO_ID" = "null" ]; then
+            echo "Error: Failed to get GitHub repository ID"
+            exit 1
+          fi
+          
+          echo "repo_id=$REPO_ID" >> $GITHUB_OUTPUT
+          echo "GitHub Repository ID: $REPO_ID"
+
       - name: Trigger Vercel Deployment
         id: deploy
         run: |
@@ -83,7 +101,7 @@ jobs:
               \"target\": \"production\",
               \"gitSource\": {
                 \"type\": \"github\",
-                \"repo\": \"${{ github.repository }}\",
+                \"repoId\": ${{ steps.github-repo.outputs.repo_id }},
                 \"ref\": \"${{ github.ref_name }}\",
                 \"sha\": \"${{ github.sha }}\"
               }
