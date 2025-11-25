@@ -125,7 +125,7 @@ jobs:
       - name: Wait for Deployment
         run: |
           DEPLOYMENT_ID="${{ steps.deploy.outputs.deployment_id }}"
-          MAX_WAIT=300 # 5분
+          MAX_WAIT=60 # 5분
           ELAPSED=0
           
           echo "Waiting for deployment to complete..."
