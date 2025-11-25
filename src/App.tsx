@@ -5,10 +5,15 @@ import VoicePlayer from './components/VoicePlayer'
 import VoiceRecorder from './components/VoiceRecorder'
 import FeedbackDisplay from './components/FeedbackDisplay'
 import ProgressTracker from './components/ProgressTracker'
+import AuthForm from './components/AuthForm'
 import { textToSpeech, transcribeAudio, analyzeResponse, generateCustomerResponse } from './services/google-cloud'
 import { createSession, createResponse, createFeedback } from './services/database'
+import { getCurrentUser, onAuthStateChange, signOut } from './services/auth'
+import { User } from '@supabase/supabase-js'
 
 function App() {
+  const [user, setUser] = useState<User | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [currentStep, setCurrentStep] = useState<AppStep>('scenario-selection')
   const [selectedScenario, setSelectedScenario] = useState<Scenario | null>(null)
   const [customerAudioBlob, setCustomerAudioBlob] = useState<Blob | null>(null)
@@ -23,6 +28,25 @@ function App() {
   const [customerVoice, setCustomerVoice] = useState<string>('ko-KR-Neural2-A') // 랜덤으로 선택된 고객 목소리
   const stepHistoryRef = useRef<AppStep[]>(['scenario-selection']) // 단계 히스토리 추적
   const isNavigatingBackRef = useRef(false) // 뒤로 가기 중인지 추적
+
+  // 인증 상태 확인
+  useEffect(() => {
+    // 초기 사용자 확인
+    getCurrentUser().then((user) => {
+      setUser(user)
+      setAuthLoading(false)
+    })
+
+    // 인증 상태 변경 감지
+    const { data: { subscription } } = onAuthStateChange((user) => {
+      setUser(user)
+      setAuthLoading(false)
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
 
   // 브라우저 뒤로 가기 처리
   useEffect(() => {
@@ -258,15 +282,59 @@ function App() {
     window.history.replaceState({ step: 'scenario-selection' }, '', '#')
   }
 
+  // 인증 로딩 중
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">로딩 중...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // 로그인되지 않은 경우
+  if (!user) {
+    return <AuthForm onAuthSuccess={() => getCurrentUser().then(setUser)} />
+  }
+
+  const handleLogout = async () => {
+    try {
+      await signOut()
+      setUser(null)
+      handleReset()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '로그아웃 중 오류가 발생했습니다.')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
-        <h1 className="text-4xl font-bold text-center mb-2">
-          CS Voice Trainer
-        </h1>
-        <p className="text-center text-gray-600 mb-8">
-          음성 기반 상담 시뮬레이터
-        </p>
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h1 className="text-4xl font-bold mb-2">
+              CS Voice Trainer
+            </h1>
+            <p className="text-gray-600">
+              음성 기반 상담 시뮬레이터
+            </p>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-sm text-gray-600">
+                {user.email || user.user_metadata?.name || '사용자'}
+              </p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              로그아웃
+            </button>
+          </div>
+        </div>
 
         {currentStep !== 'scenario-selection' && (
           <ProgressTracker currentStep={currentStep} />
