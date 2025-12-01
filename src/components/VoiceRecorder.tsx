@@ -1,7 +1,7 @@
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder'
 
 interface VoiceRecorderProps {
-  onRecordingComplete: (audioBlob: Blob, shouldEndConversation?: boolean) => void
+  onRecordingComplete: (audioBlob: Blob) => void
 }
 
 export default function VoiceRecorder({ onRecordingComplete }: VoiceRecorderProps) {

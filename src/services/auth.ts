@@ -73,3 +73,31 @@ export function onAuthStateChange(callback: (user: User | null) => void) {
   })
 }
 
+import { getCurrentUserProfile } from './userManagement'
+
+/**
+ * 관리자 권한 확인 (클라이언트 측 간편 확인용)
+ * 실제 보안은 DB RLS 정책으로 처리됨
+ */
+export function isAdmin(user: User | null): boolean {
+  if (!user) return false
+  
+  // 1. 이메일 하드코딩 확인 (최우선 관리자)
+  if (user.email === 'admin@test.com' || user.email === 'admin@example.com') return true
+  
+  // 2. 메타데이터 role 확인
+  // 참고: 실제 권한은 DB의 profiles 테이블을 따르지만, 
+  // UI 편의를 위해 로그인 시 메타데이터나 이메일로 1차 확인
+  if (user.user_metadata?.role === 'admin') return true
+
+  return false
+}
+
+/**
+ * DB 기반으로 정확한 관리자 권한 확인 (비동기)
+ */
+export async function checkIsAdminDB(): Promise<boolean> {
+  const profile = await getCurrentUserProfile()
+  return profile?.role === 'admin'
+}
+

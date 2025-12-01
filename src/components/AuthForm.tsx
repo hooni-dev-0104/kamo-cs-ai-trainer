@@ -25,17 +25,25 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
       if (isLogin) {
         await signIn(email, password)
         onAuthSuccess()
-      } else {
-        const { user, session } = await signUp(email, password, name)
-        // 세션이 없으면 이메일 인증이 필요한 경우
-        if (!session && user) {
-          setVerificationEmail(email)
-          setShowEmailVerification(true)
-        } else {
-          // 이메일 인증이 비활성화되어 있으면 바로 로그인
-          onAuthSuccess()
-        }
-      }
+          } else {
+            const { session } = await signUp(email, password, name)
+            
+            if (session) {
+              onAuthSuccess()
+            } else {
+              // 세션이 바로 생성되지 않은 경우 (이메일 인증 필요 등)
+              // 바로 로그인을 시도해본다 (Auto Confirm 설정일 수 있으므로)
+              try {
+                await signIn(email, password)
+                onAuthSuccess()
+              } catch (signInError) {
+                // 로그인 실패 시 이메일 인증 화면 표시
+                console.log('Sign in failed, showing verification screen:', signInError)
+                setVerificationEmail(email)
+                setShowEmailVerification(true)
+              }
+            }
+          }
     } catch (err) {
       setError(err instanceof Error ? err.message : '인증 중 오류가 발생했습니다.')
     } finally {

@@ -1,10 +1,13 @@
 import { supabase } from './supabase'
 import { Session, Response, Feedback } from '../types'
 
-export async function createSession(scenarioId: string): Promise<Session> {
+export async function createSession(scenarioId: string, userId?: string): Promise<Session> {
   const { data, error } = await supabase
     .from('sessions')
-    .insert({ scenario_id: scenarioId })
+    .insert({ 
+      scenario_id: scenarioId,
+      user_id: userId // user_id 추가
+    })
     .select()
     .single()
 

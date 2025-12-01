@@ -189,6 +189,75 @@ export async function textToSpeech(
 }
 
 /**
+ * Google Gemini API를 사용하여 초기 고객 말 생성
+ */
+export async function generateInitialCustomerMessage(
+  scenarioContext: string,
+  customerPrompt: string,
+  initialScript?: string // 참고용 초기 스크립트 (있으면 참고)
+): Promise<string> {
+  const prompt = `${customerPrompt}
+
+시나리오 컨텍스트: ${scenarioContext}
+
+${initialScript ? `참고할 수 있는 초기 말 예시: "${initialScript}"` : ''}
+
+위 시나리오와 컨텍스트를 바탕으로 고객이 처음 상담원에게 말할 내용을 생성해주세요. 
+- **중요: 여러 가지 상황을 나열하지 마세요. 지금 당장 겪고 있는 단 하나의 구체적인 불만 상황을 연기하세요.**
+- 상담원에게 직접 말을 건네는 대화체로 작성하세요. (독백이나 상황 설명 금지)
+- 1-2문장으로 간결하게 말하세요.
+- 불만이나 문제 상황을 명확히 전달하세요.
+- 예시: "기사님이 길을 너무 돌아가셔서 요금이 많이 나왔어요. 이거 환불해 주세요."`
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_CLOUD_API_KEY}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.9, // 더 다양한 표현을 위해 temperature 높임
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 150,
+        },
+      }),
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.json()
+    const errorMessage = error.error?.message || 'Unknown error'
+    
+    if (errorMessage.includes('quota') || errorMessage.includes('billing')) {
+      throw new Error(`Google Cloud API 할당량이 초과되었습니다. Google Cloud Console에서 사용량을 확인해주세요. (${errorMessage})`)
+    }
+    
+    throw new Error(`초기 고객 말 생성 실패: ${errorMessage}`)
+  }
+
+  const data = await response.json()
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text
+
+  if (!content) {
+    throw new Error('초기 고객 말을 생성할 수 없습니다.')
+  }
+
+  return content.trim()
+}
+
+/**
  * Google Gemini API를 사용하여 고객의 다음 말 생성 (대화형)
  */
 export async function generateCustomerResponse(
@@ -210,7 +279,7 @@ ${historyText}
 위 대화를 바탕으로 고객의 다음 말을 생성해주세요. 고객의 감정과 상황에 맞게 자연스럽고 짧게(1-2문장) 응답해주세요. 대화가 자연스럽게 종료될 수 있도록 "알겠습니다", "감사합니다" 같은 종료 표현도 사용할 수 있습니다.`
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GOOGLE_CLOUD_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_CLOUD_API_KEY}`,
     {
       method: 'POST',
       headers: {
@@ -289,7 +358,7 @@ ${conversationText}
 JSON만 응답하고 다른 텍스트는 포함하지 마세요.`
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GOOGLE_CLOUD_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_CLOUD_API_KEY}`,
     {
       method: 'POST',
       headers: {

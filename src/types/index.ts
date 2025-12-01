@@ -10,6 +10,7 @@ export interface Scenario {
 
 export interface Session {
   id: string
+  user_id: string // 사용자 ID 추가
   scenario_id: string
   created_at: string
 }
@@ -39,17 +40,24 @@ export interface Feedback {
 }
 
 export type AppStep = 
+  | 'mode-selection' // 모드 선택 (초기 화면)
+  | 'admin-dashboard' // 관리자 대시보드
   | 'scenario-selection'
   | 'listening'
+  | 'waiting-for-response'
   | 'recording'
   | 'transcribing'
   | 'generating-response'
   | 'analyzing'
   | 'feedback'
+  | 'profile'
+  | 'leaderboard'
+  | 'quiz-home' // 퀴즈 업로드
+  | 'quiz-solver' // 퀴즈 풀이
+  | 'quiz-result' // 퀴즈 결과
 
 export interface ConversationTurn {
   role: 'customer' | 'user'
   text: string
   timestamp: Date
 }
-
