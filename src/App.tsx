@@ -433,9 +433,9 @@ function App() {
               className="text-4xl font-bold mb-2 cursor-pointer"
               onClick={() => setCurrentStep('mode-selection')}
             >
-              CS Voice Trainer
+              CS AI 트레이너
             </h1>
-            <p className="text-gray-600">음성 기반 상담 시뮬레이터</p>
+            <p className="text-gray-600">AI 기반 고객서비스 트레이닝 플랫폼</p>
           </div>
           <div className="flex items-center gap-4">
             {userStats && (

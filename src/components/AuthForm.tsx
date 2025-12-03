@@ -81,8 +81,8 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">CS Voice Trainer</h1>
-          <p className="text-gray-600">음성 기반 상담 시뮬레이터</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">CS AI 트레이너</h1>
+          <p className="text-gray-600">AI 기반 고객서비스 트레이닝 플랫폼</p>
         </div>
 
         <div className="flex mb-6 bg-gray-100 rounded-lg p-1">

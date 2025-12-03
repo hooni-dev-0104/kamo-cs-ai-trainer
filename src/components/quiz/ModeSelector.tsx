@@ -35,7 +35,7 @@ export default function ModeSelector({ onSelectMode }: ModeSelectorProps) {
           </div>
           <h3 className="text-2xl font-bold text-gray-900 mb-3">AI 이론 마스터</h3>
           <p className="text-gray-600 mb-6">
-            학습 자료(Zip)를 업로드하면<br/>
+            등록된 학습 자료를 선택하면<br/>
             AI가 시험 문제를 출제합니다.
           </p>
           <button className="px-6 py-2 bg-purple-500 text-white rounded-full font-semibold group-hover:bg-purple-600 transition-colors">
