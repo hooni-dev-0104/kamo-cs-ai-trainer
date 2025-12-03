@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { extractTextFromZip, generateQuizFromMaterials } from '../../services/quiz'
 import { getQuizMaterials, createQuizMaterial, deleteQuizMaterial } from '../../services/materials'
 import { QuizSet, QuizMaterial } from '../../types/quiz'
-import { getCurrentUser, isAdmin } from '../../services/auth'
-import { User } from '@supabase/supabase-js'
+import { getCurrentUser } from '../../services/auth'
+import { getCurrentUserProfile } from '../../services/userManagement'
 
 interface QuizHomeProps {
   onQuizGenerated: (quizSet: QuizSet) => void
@@ -11,7 +11,7 @@ interface QuizHomeProps {
 
 export default function QuizHome({ onQuizGenerated }: QuizHomeProps) {
   const [materials, setMaterials] = useState<QuizMaterial[]>([])
-  const [user, setUser] = useState<User | null>(null)
+  const [userIsAdmin, setUserIsAdmin] = useState(false) // DB 기반 관리자 상태
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [generating, setGenerating] = useState(false) // 퀴즈 생성 중 상태
@@ -29,7 +29,17 @@ export default function QuizHome({ onQuizGenerated }: QuizHomeProps) {
         getCurrentUser()
       ])
       setMaterials(fetchedMaterials)
-      setUser(currentUser)
+
+      // DB 기반 관리자 권한 확인
+      if (currentUser) {
+        try {
+          const profile = await getCurrentUserProfile()
+          setUserIsAdmin(profile?.role === 'admin')
+        } catch (err) {
+          console.error('Failed to check admin status:', err)
+          setUserIsAdmin(false)
+        }
+      }
     } catch (err) {
       console.error(err)
       setError('데이터를 불러오는 중 오류가 발생했습니다.')
@@ -104,8 +114,6 @@ export default function QuizHome({ onQuizGenerated }: QuizHomeProps) {
       handleFileUpload(e.target.files[0])
     }
   }
-
-  const userIsAdmin = isAdmin(user)
 
   if (loading) {
     return (
