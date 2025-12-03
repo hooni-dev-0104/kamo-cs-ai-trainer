@@ -318,6 +318,11 @@ function App() {
       return
     }
 
+    // 대화 종료 확인
+    if (!confirm('대화를 종료하고 피드백을 받으시겠습니까?\n\n종료하면 더 이상 대화를 이어갈 수 없습니다.')) {
+      return
+    }
+
     setCurrentStep('analyzing')
     setLoading(true)
     setError(null)

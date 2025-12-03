@@ -16,34 +16,81 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
   const [showEmailVerification, setShowEmailVerification] = useState(false)
   const [verificationEmail, setVerificationEmail] = useState('')
 
+  // 이메일 형식 검증
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
+
+  // 비밀번호 강도 검증
+  const validatePassword = (password: string): { valid: boolean; message?: string } => {
+    if (password.length < 6) {
+      return { valid: false, message: '비밀번호는 최소 6자 이상이어야 합니다.' }
+    }
+    if (password.length > 128) {
+      return { valid: false, message: '비밀번호는 최대 128자까지 가능합니다.' }
+    }
+    return { valid: true }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+
+    // 이메일 검증
+    if (!email || !email.trim()) {
+      setError('이메일을 입력해주세요.')
+      return
+    }
+
+    if (!validateEmail(email)) {
+      setError('올바른 이메일 형식이 아닙니다.')
+      return
+    }
+
+    // 비밀번호 검증
+    if (!password || !password.trim()) {
+      setError('비밀번호를 입력해주세요.')
+      return
+    }
+
+    const passwordValidation = validatePassword(password)
+    if (!passwordValidation.valid) {
+      setError(passwordValidation.message || '비밀번호가 올바르지 않습니다.')
+      return
+    }
+
+    // 이름 검증 (회원가입 시)
+    if (!isLogin && name && name.trim().length > 100) {
+      setError('이름은 최대 100자까지 가능합니다.')
+      return
+    }
+
     setLoading(true)
 
     try {
       if (isLogin) {
-        await signIn(email, password)
+        await signIn(email.trim(), password)
         onAuthSuccess()
-          } else {
-            const { session } = await signUp(email, password, name)
-            
-            if (session) {
-              onAuthSuccess()
-            } else {
-              // 세션이 바로 생성되지 않은 경우 (이메일 인증 필요 등)
-              // 바로 로그인을 시도해본다 (Auto Confirm 설정일 수 있으므로)
-              try {
-                await signIn(email, password)
-                onAuthSuccess()
-              } catch (signInError) {
-                // 로그인 실패 시 이메일 인증 화면 표시
-                console.log('Sign in failed, showing verification screen:', signInError)
-                setVerificationEmail(email)
-                setShowEmailVerification(true)
-              }
-            }
+      } else {
+        const { session } = await signUp(email.trim(), password, name?.trim() || '')
+        
+        if (session) {
+          onAuthSuccess()
+        } else {
+          // 세션이 바로 생성되지 않은 경우 (이메일 인증 필요 등)
+          // 바로 로그인을 시도해본다 (Auto Confirm 설정일 수 있으므로)
+          try {
+            await signIn(email.trim(), password)
+            onAuthSuccess()
+          } catch (signInError) {
+            // 로그인 실패 시 이메일 인증 화면 표시
+            console.log('Sign in failed, showing verification screen:', signInError)
+            setVerificationEmail(email.trim())
+            setShowEmailVerification(true)
           }
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '인증 중 오류가 발생했습니다.')
     } finally {

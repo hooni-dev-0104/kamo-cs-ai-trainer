@@ -49,8 +49,22 @@ export default function QuizHome({ onQuizGenerated }: QuizHomeProps) {
   }
 
   const handleFileUpload = async (file: File) => {
+    // 파일 형식 검증
     if (!file.name.endsWith('.zip')) {
       setError('Zip 파일만 업로드 가능합니다.')
+      return
+    }
+
+    // 파일 크기 검증 (10MB 제한)
+    const maxSize = 10 * 1024 * 1024 // 10MB
+    if (file.size > maxSize) {
+      setError(`파일 크기가 너무 큽니다. 최대 10MB까지 업로드 가능합니다. (현재: ${(file.size / 1024 / 1024).toFixed(2)}MB)`)
+      return
+    }
+
+    // 빈 파일 검증
+    if (file.size === 0) {
+      setError('빈 파일은 업로드할 수 없습니다.')
       return
     }
 
@@ -61,8 +75,19 @@ export default function QuizHome({ onQuizGenerated }: QuizHomeProps) {
       // 1. 텍스트 추출
       const text = await extractTextFromZip(file)
       
+      // 추출된 텍스트 검증
+      if (!text || text.trim().length === 0) {
+        setError('파일에서 텍스트를 추출할 수 없습니다. 텍스트 파일(.txt, .md)이나 파워포인트(.pptx) 파일이 포함되어 있는지 확인해주세요.')
+        return
+      }
+      
       // 2. DB에 저장 (제목은 파일명)
-      const title = file.name.replace('.zip', '')
+      const title = file.name.replace('.zip', '').trim()
+      if (!title || title.length === 0) {
+        setError('파일명이 올바르지 않습니다.')
+        return
+      }
+      
       await createQuizMaterial(title, text, '관리자 업로드 자료')
       
       // 3. 목록 갱신

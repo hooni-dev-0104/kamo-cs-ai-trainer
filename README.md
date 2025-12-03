@@ -75,7 +75,8 @@ VITE_GOOGLE_CLOUD_PROJECT_ID=your_project_id
 ```
 
 4. Supabase 데이터베이스 설정
-`supabase/migrations/001_initial_schema.sql` 파일의 내용을 Supabase SQL Editor에서 실행하세요.
+`supabase/migrations/` 디렉토리의 SQL 파일들을 순서대로 Supabase SQL Editor에서 실행하세요.
+자세한 내용은 [supabase/README.md](supabase/README.md)를 참고하세요.
 
 5. 개발 서버 실행
 ```bash
@@ -105,8 +106,21 @@ kamo-cs-trainer/
 │   ├── App.tsx
 │   ├── main.tsx
 │   └── index.css
+├── docs/                    # 프로젝트 문서
+│   ├── PROPOSAL.md          # 기획서
+│   ├── DEVELOPMENT.md       # 개발 방법서
+│   ├── USER_GUIDE.md        # 사용자 가이드
+│   ├── DEMO.md              # 데모 시나리오
+│   ├── USE_CASES.md         # 실제 사용 사례
+│   └── TROUBLESHOOTING.md   # 문제 해결 가이드
 ├── supabase/
-│   └── migrations/          # 데이터베이스 마이그레이션
+│   ├── README.md            # 데이터베이스 마이그레이션 가이드
+│   └── migrations/          # 데이터베이스 마이그레이션 파일
+│       ├── 001_initial_schema.sql      # 초기 스키마
+│       ├── 002_gamification.sql        # 게임화 기능
+│       ├── 003_quiz_materials.sql      # 퀴즈 학습 자료
+│       ├── 004_user_management.sql    # 사용자 관리
+│       └── 005_fix_rls.sql            # RLS 정책 수정
 └── public/
 ```
 
@@ -116,6 +130,17 @@ kamo-cs-trainer/
 2. 고객 음성 듣기: 이어폰/헤드셋을 착용하고 AI 고객의 음성을 들어봅니다.
 3. 응대 녹음: 마이크 버튼을 눌러 응대 내용을 녹음합니다.
 4. 결과 확인: AI가 분석한 피드백을 확인하고 개선점을 파악합니다.
+
+## 문서
+
+프로젝트에 대한 상세한 정보는 다음 문서를 참고하세요:
+
+- **[기획서 (docs/PROPOSAL.md)](docs/PROPOSAL.md)**: 문제 정의, 해결 방안, 타겟 사용자, 핵심 기능, 기대 효과
+- **[개발 방법서 (docs/DEVELOPMENT.md)](docs/DEVELOPMENT.md)**: 개발 과정, 기술 선택 이유, 주요 도전과제 및 해결, 개발 히스토리
+- **[사용자 가이드 (docs/USER_GUIDE.md)](docs/USER_GUIDE.md)**: 단계별 가이드, 기능 설명, FAQ, 문제 해결
+- **[데모 시나리오 (docs/DEMO.md)](docs/DEMO.md)**: 테스트 계정, 단계별 시나리오, 주요 기능 하이라이트
+- **[실제 사용 사례 (docs/USE_CASES.md)](docs/USE_CASES.md)**: 3가지 시나리오, ROI 계산
+- **[문제 해결 가이드 (docs/TROUBLESHOOTING.md)](docs/TROUBLESHOOTING.md)**: 배포 및 운영 중 발생할 수 있는 문제 해결 방법
 
 ## 배포
 

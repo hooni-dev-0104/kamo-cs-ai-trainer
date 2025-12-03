@@ -72,11 +72,23 @@ export async function extractTextFromZip(file: File): Promise<string> {
     if (ext === '.pptx') {
       try {
         const pptxData = await zipEntry.async('arraybuffer')
+        
+        // 파일 크기 검증 (100MB 제한)
+        if (pptxData.byteLength > 100 * 1024 * 1024) {
+          throw new Error(`PPTX 파일이 너무 큽니다. (${(pptxData.byteLength / 1024 / 1024).toFixed(2)}MB)`)
+        }
+        
         const pptxText = await extractTextFromPptx(pptxData)
+        
+        if (!pptxText || pptxText.trim().length === 0) {
+          throw new Error('PPTX 파일에서 텍스트를 추출할 수 없습니다. 슬라이드에 텍스트가 포함되어 있는지 확인해주세요.')
+        }
+        
         fullText += `\n--- PPTX File: ${relativePath} ---\n${pptxText}\n`
       } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : '알 수 없는 오류'
         console.warn(`Failed to parse PPTX file ${relativePath}:`, err)
-        fullText += `\n--- PPTX File: ${relativePath} (Parsing Failed) ---\n`
+        throw new Error(`PPTX 파일 "${relativePath}" 파싱 실패: ${errorMessage}`)
       }
       continue
     }
@@ -140,46 +152,143 @@ ${materialsText.substring(0, 100000)} // 너무 길 경우를 대비해 일부 �
 }
 `
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_CLOUD_API_KEY}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.5, // 퀴즈는 정확성이 중요하므로 낮게 설정
-          response_mime_type: "application/json" // JSON 응답 강제
-        },
-      }),
+  // 재시도 로직을 포함한 API 호출
+  const maxRetries = 3
+  let lastError: Error | null = null
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      let response: Response
+      try {
+        response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_CLOUD_API_KEY}`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: {
+                temperature: 0.5, // 퀴즈는 정확성이 중요하므로 낮게 설정
+                response_mime_type: "application/json" // JSON 응답 강제
+              },
+            }),
+          }
+        )
+      } catch (error) {
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+          continue
+        }
+        throw new Error('네트워크 연결에 문제가 있습니다. 인터넷 연결을 확인해주세요.')
+      }
+
+      if (!response.ok) {
+        let error: any
+        try {
+          error = await response.json()
+        } catch {
+          throw new Error(`서버 오류가 발생했습니다. (상태 코드: ${response.status})`)
+        }
+        
+        const errorMessage = error.error?.message || 'Unknown error'
+        
+        // 할당량 초과나 인증 오류는 재시도하지 않음
+        if (
+          errorMessage.includes('quota') ||
+          errorMessage.includes('billing') ||
+          errorMessage.includes('permission') ||
+          errorMessage.includes('unauthorized')
+        ) {
+          if (errorMessage.includes('quota') || errorMessage.includes('billing')) {
+            throw new Error('Google Cloud API 할당량이 초과되었습니다. Google Cloud Console에서 사용량을 확인해주세요.')
+          }
+          throw new Error('API 인증에 실패했습니다. API 키를 확인해주세요.')
+        }
+        
+        // 재시도 가능한 오류
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+          continue
+        }
+        
+        throw new Error(`퀴즈 생성 실패: ${errorMessage}`)
+      }
+
+      const data = await response.json()
+      const content = data.candidates?.[0]?.content?.parts?.[0]?.text
+
+      if (!content) {
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+          continue
+        }
+        throw new Error('AI로부터 응답을 받을 수 없습니다. 다시 시도해주세요.')
+      }
+
+      try {
+        const quizSet = JSON.parse(content) as QuizSet
+        
+        // 데이터 검증
+        if (!quizSet.questions || !Array.isArray(quizSet.questions) || quizSet.questions.length === 0) {
+          throw new Error('퀴즈 문제가 생성되지 않았습니다.')
+        }
+        
+        if (quizSet.questions.length !== 10) {
+          console.warn(`예상된 문제 수(10개)와 다릅니다: ${quizSet.questions.length}개`)
+        }
+        
+        // 각 문제 검증
+        for (const q of quizSet.questions) {
+          if (!q.question || !q.explanation) {
+            throw new Error('퀴즈 문제 형식이 올바르지 않습니다.')
+          }
+          if (q.type === 'multiple-choice' && (!q.options || q.options.length !== 4)) {
+            throw new Error('객관식 문제는 4개의 보기가 필요합니다.')
+          }
+          if (q.type === 'true-false' && typeof q.correctAnswer !== 'boolean') {
+            throw new Error('O/X 문제의 정답은 true 또는 false여야 합니다.')
+          }
+        }
+        
+        // ID 재할당
+        quizSet.questions = quizSet.questions.map((q, idx) => ({
+          ...q,
+          id: idx + 1
+        }))
+        
+        return quizSet
+      } catch (e) {
+        if (e instanceof SyntaxError) {
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+            continue
+          }
+          console.error('JSON Parse Error:', content)
+          throw new Error('퀴즈 데이터 형식이 올바르지 않습니다. 다시 시도해주세요.')
+        }
+        throw e
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+      
+      // 재시도하지 않을 오류는 즉시 throw
+      if (
+        lastError.message.includes('할당량') ||
+        lastError.message.includes('인증') ||
+        lastError.message.includes('네트워크')
+      ) {
+        throw lastError
+      }
+      
+      // 마지막 시도가 아니면 계속
+      if (attempt < maxRetries) {
+        continue
+      }
     }
-  )
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(`퀴즈 생성 실패: ${error.error?.message || 'Unknown error'}`)
   }
 
-  const data = await response.json()
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text
-
-  if (!content) {
-    throw new Error('Gemini로부터 응답을 받을 수 없습니다.')
-  }
-
-  try {
-    const quizSet = JSON.parse(content) as QuizSet
-    // ID 재할당 및 검증
-    quizSet.questions = quizSet.questions.map((q, idx) => ({
-      ...q,
-      id: idx + 1
-    }))
-    return quizSet
-  } catch (e) {
-    console.error('JSON Parse Error:', content)
-    throw new Error('퀴즈 데이터 형식이 올바르지 않습니다.')
-  }
+  throw lastError || new Error('퀴즈 생성에 실패했습니다. 다시 시도해주세요.')
 }
 

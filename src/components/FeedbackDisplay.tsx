@@ -62,22 +62,34 @@ export default function FeedbackDisplay({ feedback, transcribedText }: FeedbackD
       </div>
 
       {feedback.strengths.length > 0 && (
-        <div>
-          <h3 className="text-lg font-semibold mb-2 text-green-700">강점</h3>
-          <ul className="list-disc list-inside space-y-1">
+        <div className="bg-green-50 border-l-4 border-green-400 p-4 rounded-lg">
+          <h3 className="text-lg font-semibold mb-3 text-green-800 flex items-center gap-2">
+            <span className="text-xl">✨</span>
+            잘한 점
+          </h3>
+          <ul className="space-y-2">
             {feedback.strengths.map((strength, index) => (
-              <li key={index} className="text-gray-700">{strength}</li>
+              <li key={index} className="flex items-start gap-2 text-gray-800">
+                <span className="text-green-500 font-bold mt-1">✓</span>
+                <span className="flex-1">{strength}</span>
+              </li>
             ))}
           </ul>
         </div>
       )}
 
       {feedback.improvements.length > 0 && (
-        <div>
-          <h3 className="text-lg font-semibold mb-2 text-orange-700">개선점</h3>
-          <ul className="list-disc list-inside space-y-1">
+        <div className="bg-orange-50 border-l-4 border-orange-400 p-4 rounded-lg">
+          <h3 className="text-lg font-semibold mb-3 text-orange-800 flex items-center gap-2">
+            <span className="text-xl">💡</span>
+            개선 제안 (Action Items)
+          </h3>
+          <ul className="space-y-2">
             {feedback.improvements.map((improvement, index) => (
-              <li key={index} className="text-gray-700">{improvement}</li>
+              <li key={index} className="flex items-start gap-2 text-gray-800">
+                <span className="text-orange-500 font-bold mt-1">•</span>
+                <span className="flex-1">{improvement}</span>
+              </li>
             ))}
           </ul>
         </div>

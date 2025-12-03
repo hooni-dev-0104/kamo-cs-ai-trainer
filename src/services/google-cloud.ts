@@ -4,6 +4,85 @@ if (!GOOGLE_CLOUD_API_KEY) {
   throw new Error('Missing Google Cloud API key')
 }
 
+/**
+ * API 호출 재시도 헬퍼 함수
+ * @param fn API 호출 함수
+ * @param maxRetries 최대 재시도 횟수 (기본값: 3)
+ * @param retryDelay 재시도 간격 (ms, 기본값: 1000)
+ */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  retryDelay: number = 1000
+): Promise<T> {
+  let lastError: Error | null = null
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+      
+      // 할당량 초과나 인증 오류는 재시도하지 않음
+      const errorMessage = lastError.message.toLowerCase()
+      if (
+        errorMessage.includes('quota') ||
+        errorMessage.includes('billing') ||
+        errorMessage.includes('permission') ||
+        errorMessage.includes('unauthorized') ||
+        errorMessage.includes('forbidden')
+      ) {
+        throw lastError
+      }
+      
+      // 마지막 시도가 아니면 재시도
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, retryDelay * attempt))
+        continue
+      }
+      
+      throw lastError
+    }
+  }
+  
+  throw lastError || new Error('알 수 없는 오류가 발생했습니다.')
+}
+
+/**
+ * 네트워크 오류와 API 오류를 구분하는 헬퍼 함수
+ */
+function handleApiError(error: any, defaultMessage: string): Error {
+  // 네트워크 오류 확인
+  if (error instanceof TypeError && error.message.includes('fetch')) {
+    return new Error('네트워크 연결에 문제가 있습니다. 인터넷 연결을 확인해주세요.')
+  }
+  
+  // API 응답 오류
+  if (error.error?.message) {
+    const errorMessage = error.error.message
+    
+    // 할당량 초과
+    if (errorMessage.includes('quota') || errorMessage.includes('billing')) {
+      return new Error('Google Cloud API 할당량이 초과되었습니다. Google Cloud Console에서 사용량을 확인해주세요.')
+    }
+    
+    // 인증 오류
+    if (errorMessage.includes('permission') || errorMessage.includes('unauthorized') || errorMessage.includes('forbidden')) {
+      return new Error('API 인증에 실패했습니다. API 키를 확인해주세요.')
+    }
+    
+    // 모델 오류
+    if (errorMessage.includes('model') || errorMessage.includes('not found')) {
+      return new Error('AI 모델을 찾을 수 없습니다. 잠시 후 다시 시도해주세요.')
+    }
+    
+    return new Error(`${defaultMessage}: ${errorMessage}`)
+  }
+  
+  // 기타 오류
+  return new Error(error.message || defaultMessage)
+}
+
 export interface TranscriptionResponse {
   results: Array<{
     alternatives: Array<{
@@ -28,49 +107,55 @@ export interface FeedbackResponse {
  * Google Cloud Speech-to-Text API를 사용하여 음성을 텍스트로 변환
  */
 export async function transcribeAudio(audioBlob: Blob): Promise<string> {
-  // WebM을 base64로 변환
-  const base64Audio = await blobToBase64(audioBlob)
-  const base64Data = base64Audio.split(',')[1] // data:audio/webm;base64, 부분 제거
+  return withRetry(async () => {
+    // WebM을 base64로 변환
+    const base64Audio = await blobToBase64(audioBlob)
+    const base64Data = base64Audio.split(',')[1] // data:audio/webm;base64, 부분 제거
 
-  const response = await fetch(
-    `https://speech.googleapis.com/v1/speech:recognize?key=${GOOGLE_CLOUD_API_KEY}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        config: {
-          encoding: 'WEBM_OPUS',
-          sampleRateHertz: 48000,
-          languageCode: 'ko-KR',
-          audioChannelCount: 1,
-        },
-        audio: {
-          content: base64Data,
-        },
-      }),
+    let response: Response
+    try {
+      response = await fetch(
+        `https://speech.googleapis.com/v1/speech:recognize?key=${GOOGLE_CLOUD_API_KEY}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            config: {
+              encoding: 'WEBM_OPUS',
+              sampleRateHertz: 48000,
+              languageCode: 'ko-KR',
+              audioChannelCount: 1,
+            },
+            audio: {
+              content: base64Data,
+            },
+          }),
+        }
+      )
+    } catch (error) {
+      throw handleApiError(error, '음성 인식 요청 실패')
     }
-  )
 
-  if (!response.ok) {
-    const error = await response.json()
-    const errorMessage = error.error?.message || 'Unknown error'
-    
-    if (errorMessage.includes('quota') || errorMessage.includes('billing')) {
-      throw new Error(`Google Cloud API 할당량이 초과되었습니다. Google Cloud Console에서 사용량을 확인해주세요. (${errorMessage})`)
+    if (!response.ok) {
+      let error: any
+      try {
+        error = await response.json()
+      } catch {
+        throw new Error(`서버 오류가 발생했습니다. (상태 코드: ${response.status})`)
+      }
+      throw handleApiError(error, '음성 인식 실패')
     }
+
+    const data: TranscriptionResponse = await response.json()
     
-    throw new Error(`음성 인식 실패: ${errorMessage}`)
-  }
+    if (!data.results || data.results.length === 0) {
+      throw new Error('음성을 인식할 수 없습니다. 마이크를 확인하고 다시 시도해주세요.')
+    }
 
-  const data: TranscriptionResponse = await response.json()
-  
-  if (!data.results || data.results.length === 0) {
-    throw new Error('음성을 인식할 수 없습니다. 다시 시도해주세요.')
-  }
-
-  return data.results[0].alternatives[0].transcript
+    return data.results[0].alternatives[0].transcript
+  }, 3, 1000)
 }
 
 /**
@@ -134,58 +219,64 @@ export async function textToSpeech(
 
   const emotionConfig = getEmotionConfig(emotion)
 
-  const response = await fetch(
-    `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_CLOUD_API_KEY}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        input: {
-          text: text,
-        },
-        voice: {
-          languageCode: 'ko-KR',
-          name: voiceName,
-          ssmlGender: getGender(voiceName),
-        },
-        audioConfig: {
-          audioEncoding: 'LINEAR16', // WAV 형식 (고품질, 모든 브라우저 지원)
-          sampleRateHertz: 24000, // 24kHz 샘플링 레이트 (고품질)
-          speakingRate: emotionConfig.speakingRate,
-          pitch: emotionConfig.pitch,
-          volumeGainDb: emotionConfig.volumeGainDb,
-        },
-      }),
+  return withRetry(async () => {
+    let response: Response
+    try {
+      response = await fetch(
+        `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_CLOUD_API_KEY}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            input: {
+              text: text,
+            },
+            voice: {
+              languageCode: 'ko-KR',
+              name: voiceName,
+              ssmlGender: getGender(voiceName),
+            },
+            audioConfig: {
+              audioEncoding: 'LINEAR16', // WAV 형식 (고품질, 모든 브라우저 지원)
+              sampleRateHertz: 24000, // 24kHz 샘플링 레이트 (고품질)
+              speakingRate: emotionConfig.speakingRate,
+              pitch: emotionConfig.pitch,
+              volumeGainDb: emotionConfig.volumeGainDb,
+            },
+          }),
+        }
+      )
+    } catch (error) {
+      throw handleApiError(error, '음성 생성 요청 실패')
     }
-  )
 
-  if (!response.ok) {
-    const error = await response.json()
-    const errorMessage = error.error?.message || 'Unknown error'
-    
-    if (errorMessage.includes('quota') || errorMessage.includes('billing')) {
-      throw new Error(`Google Cloud API 할당량이 초과되었습니다. Google Cloud Console에서 사용량을 확인해주세요. (${errorMessage})`)
+    if (!response.ok) {
+      let error: any
+      try {
+        error = await response.json()
+      } catch {
+        throw new Error(`서버 오류가 발생했습니다. (상태 코드: ${response.status})`)
+      }
+      throw handleApiError(error, '음성 생성 실패')
     }
-    
-    throw new Error(`TTS 실패: ${errorMessage}`)
-  }
 
-  const data = await response.json()
-  const audioContent = data.audioContent
+    const data = await response.json()
+    const audioContent = data.audioContent
 
-  if (!audioContent) {
-    throw new Error('음성 생성에 실패했습니다.')
-  }
+    if (!audioContent) {
+      throw new Error('음성 생성에 실패했습니다. 다시 시도해주세요.')
+    }
 
-  // Base64를 Blob으로 변환
-  const binaryString = atob(audioContent)
-  const bytes = new Uint8Array(binaryString.length)
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i)
-  }
-  return new Blob([bytes], { type: 'audio/wav' })
+    // Base64를 Blob으로 변환
+    const binaryString = atob(audioContent)
+    const bytes = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i)
+    }
+    return new Blob([bytes], { type: 'audio/wav' })
+  }, 3, 1000)
 }
 
 /**
@@ -209,52 +300,58 @@ ${initialScript ? `참고할 수 있는 초기 말 예시: "${initialScript}"` :
 - 불만이나 문제 상황을 명확히 전달하세요.
 - 예시: "기사님이 길을 너무 돌아가셔서 요금이 많이 나왔어요. 이거 환불해 주세요."`
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_CLOUD_API_KEY}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
+  return withRetry(async () => {
+    let response: Response
+    try {
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_CLOUD_API_KEY}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [
               {
-                text: prompt,
+                parts: [
+                  {
+                    text: prompt,
+                  },
+                ],
               },
             ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.9, // 더 다양한 표현을 위해 temperature 높임
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 150,
-        },
-      }),
+            generationConfig: {
+              temperature: 0.9, // 더 다양한 표현을 위해 temperature 높임
+              topK: 40,
+              topP: 0.95,
+              maxOutputTokens: 150,
+            },
+          }),
+        }
+      )
+    } catch (error) {
+      throw handleApiError(error, '초기 고객 말 생성 요청 실패')
     }
-  )
 
-  if (!response.ok) {
-    const error = await response.json()
-    const errorMessage = error.error?.message || 'Unknown error'
-    
-    if (errorMessage.includes('quota') || errorMessage.includes('billing')) {
-      throw new Error(`Google Cloud API 할당량이 초과되었습니다. Google Cloud Console에서 사용량을 확인해주세요. (${errorMessage})`)
+    if (!response.ok) {
+      let error: any
+      try {
+        error = await response.json()
+      } catch {
+        throw new Error(`서버 오류가 발생했습니다. (상태 코드: ${response.status})`)
+      }
+      throw handleApiError(error, '초기 고객 말 생성 실패')
     }
-    
-    throw new Error(`초기 고객 말 생성 실패: ${errorMessage}`)
-  }
 
-  const data = await response.json()
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text
+    const data = await response.json()
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text
 
-  if (!content) {
-    throw new Error('초기 고객 말을 생성할 수 없습니다.')
-  }
+    if (!content) {
+      throw new Error('초기 고객 말을 생성할 수 없습니다. 다시 시도해주세요.')
+    }
 
-  return content.trim()
+    return content.trim()
+  }, 3, 1000)
 }
 
 /**
@@ -278,52 +375,58 @@ ${historyText}
 
 위 대화를 바탕으로 고객의 다음 말을 생성해주세요. 고객의 감정과 상황에 맞게 자연스럽고 짧게(1-2문장) 응답해주세요. 대화가 자연스럽게 종료될 수 있도록 "알겠습니다", "감사합니다" 같은 종료 표현도 사용할 수 있습니다.`
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_CLOUD_API_KEY}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
+  return withRetry(async () => {
+    let response: Response
+    try {
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_CLOUD_API_KEY}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [
               {
-                text: prompt,
+                parts: [
+                  {
+                    text: prompt,
+                  },
+                ],
               },
             ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.8,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 150,
-        },
-      }),
+            generationConfig: {
+              temperature: 0.8,
+              topK: 40,
+              topP: 0.95,
+              maxOutputTokens: 150,
+            },
+          }),
+        }
+      )
+    } catch (error) {
+      throw handleApiError(error, '고객 응답 생성 요청 실패')
     }
-  )
 
-  if (!response.ok) {
-    const error = await response.json()
-    const errorMessage = error.error?.message || 'Unknown error'
-    
-    if (errorMessage.includes('quota') || errorMessage.includes('billing')) {
-      throw new Error(`Google Cloud API 할당량이 초과되었습니다. Google Cloud Console에서 사용량을 확인해주세요. (${errorMessage})`)
+    if (!response.ok) {
+      let error: any
+      try {
+        error = await response.json()
+      } catch {
+        throw new Error(`서버 오류가 발생했습니다. (상태 코드: ${response.status})`)
+      }
+      throw handleApiError(error, '고객 응답 생성 실패')
     }
-    
-    throw new Error(`고객 응답 생성 실패: ${errorMessage}`)
-  }
 
-  const data = await response.json()
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text
+    const data = await response.json()
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text
 
-  if (!content) {
-    throw new Error('고객 응답을 생성할 수 없습니다.')
-  }
+    if (!content) {
+      throw new Error('고객 응답을 생성할 수 없습니다. 다시 시도해주세요.')
+    }
 
-  return content.trim()
+    return content.trim()
+  }, 3, 1000)
 }
 
 /**
@@ -357,59 +460,81 @@ ${conversationText}
 
 JSON만 응답하고 다른 텍스트는 포함하지 마세요.`
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_CLOUD_API_KEY}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
+  return withRetry(async () => {
+    let response: Response
+    try {
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_CLOUD_API_KEY}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [
               {
-                text: prompt,
+                parts: [
+                  {
+                    text: prompt,
+                  },
+                ],
               },
             ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 1024,
-        },
-      }),
+            generationConfig: {
+              temperature: 0.7,
+              topK: 40,
+              topP: 0.95,
+              maxOutputTokens: 1024,
+            },
+          }),
+        }
+      )
+    } catch (error) {
+      throw handleApiError(error, '피드백 분석 요청 실패')
     }
-  )
 
-  if (!response.ok) {
-    const error = await response.json()
-    const errorMessage = error.error?.message || 'Unknown error'
-    
-    if (errorMessage.includes('quota') || errorMessage.includes('billing')) {
-      throw new Error(`Google Cloud API 할당량이 초과되었습니다. Google Cloud Console에서 사용량을 확인해주세요. (${errorMessage})`)
+    if (!response.ok) {
+      let error: any
+      try {
+        error = await response.json()
+      } catch {
+        throw new Error(`서버 오류가 발생했습니다. (상태 코드: ${response.status})`)
+      }
+      throw handleApiError(error, '피드백 분석 실패')
     }
-    
-    throw new Error(`피드백 분석 실패: ${errorMessage}`)
-  }
 
-  const data = await response.json()
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text
+    const data = await response.json()
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text
 
-  if (!content) {
-    throw new Error('Gemini로부터 응답을 받을 수 없습니다.')
-  }
+    if (!content) {
+      throw new Error('AI로부터 응답을 받을 수 없습니다. 다시 시도해주세요.')
+    }
 
-  try {
-    // JSON 추출 (마크다운 코드 블록 제거)
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
-    const jsonText = jsonMatch ? jsonMatch[0] : content
-    return JSON.parse(jsonText) as FeedbackResponse
-  } catch (error) {
-    throw new Error(`피드백 파싱 실패: ${error}`)
-  }
+    try {
+      // JSON 추출 (마크다운 코드 블록 제거)
+      const jsonMatch = content.match(/\{[\s\S]*\}/)
+      const jsonText = jsonMatch ? jsonMatch[0] : content
+      const parsed = JSON.parse(jsonText) as FeedbackResponse
+      
+      // 필수 필드 검증
+      if (
+        typeof parsed.empathy !== 'number' ||
+        typeof parsed.problemSolving !== 'number' ||
+        typeof parsed.professionalism !== 'number' ||
+        typeof parsed.tone !== 'number' ||
+        typeof parsed.overallScore !== 'number'
+      ) {
+        throw new Error('피드백 데이터 형식이 올바르지 않습니다.')
+      }
+      
+      return parsed
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new Error('피드백 데이터를 파싱할 수 없습니다. 다시 시도해주세요.')
+      }
+      throw error
+    }
+  }, 3, 1000)
 }
 
 /**
