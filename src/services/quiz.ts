@@ -73,9 +73,11 @@ export async function extractTextFromZip(file: File): Promise<string> {
       try {
         const pptxData = await zipEntry.async('arraybuffer')
         
-        // 파일 크기 검증 (100MB 제한)
-        if (pptxData.byteLength > 100 * 1024 * 1024) {
-          throw new Error(`PPTX 파일이 너무 큽니다. (${(pptxData.byteLength / 1024 / 1024).toFixed(2)}MB)`)
+        // 파일 크기 검증 (1GB 제한)
+        const maxPptxSize = 1024 * 1024 * 1024 // 1GB
+        if (pptxData.byteLength > maxPptxSize) {
+          const sizeInGB = (pptxData.byteLength / 1024 / 1024 / 1024).toFixed(2)
+          throw new Error(`PPTX 파일이 너무 큽니다. 최대 1GB까지 가능합니다. (현재: ${sizeInGB}GB)`)
         }
         
         const pptxText = await extractTextFromPptx(pptxData)

@@ -55,10 +55,11 @@ export default function QuizHome({ onQuizGenerated }: QuizHomeProps) {
       return
     }
 
-    // 파일 크기 검증 (10MB 제한)
-    const maxSize = 10 * 1024 * 1024 // 10MB
+    // 파일 크기 검증 (1GB 제한)
+    const maxSize = 1024 * 1024 * 1024 // 1GB
     if (file.size > maxSize) {
-      setError(`파일 크기가 너무 큽니다. 최대 10MB까지 업로드 가능합니다. (현재: ${(file.size / 1024 / 1024).toFixed(2)}MB)`)
+      const sizeInGB = (file.size / 1024 / 1024 / 1024).toFixed(2)
+      setError(`파일 크기가 너무 큽니다. 최대 1GB까지 업로드 가능합니다. (현재: ${sizeInGB}GB)`)
       return
     }
 
@@ -253,7 +254,7 @@ export default function QuizHome({ onQuizGenerated }: QuizHomeProps) {
               <>
                 <p className="text-gray-600 mb-4">
                   학습 자료(Zip)를 이곳에 드래그하거나 클릭하여 업로드하세요.<br/>
-                  <span className="text-xs text-gray-400">(.txt, .md, .pptx 포함 가능)</span>
+                  <span className="text-xs text-gray-400">(.txt, .md, .pptx 포함 가능, 최대 1GB)</span>
                 </p>
                 <input
                   type="file"
