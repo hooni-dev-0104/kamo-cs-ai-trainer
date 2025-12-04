@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { QuizStatistics, RetrainingCandidate, QuizAttemptRecord } from '../types/quiz'
+import { QuizStatistics, RetrainingCandidate, QuizAttemptRecord, MonthlyStatistics } from '../types/quiz'
 
 /**
  * 모든 시험의 통계 정보 가져오기 (관리자 전용)
@@ -264,5 +264,132 @@ export async function getAllQuizAttempts(): Promise<QuizAttemptRecord[]> {
   }
 
   return attempts
+}
+
+/**
+ * 월별 통계 가져오기 (관리자 전용)
+ */
+export async function getMonthlyStatistics(
+  year?: number,
+  months?: number[] // 특정 월만 조회 (선택적)
+): Promise<MonthlyStatistics[]> {
+  // 모든 퀴즈 결과와 세션 정보 가져오기
+  const { data: results, error: resultsError } = await supabase
+    .from('quiz_results')
+    .select(`
+      id,
+      score,
+      created_at,
+      quiz_sessions!inner(
+        id,
+        user_id,
+        material_id,
+        created_at,
+        quiz_materials!inner(
+          id,
+          title,
+          retraining_threshold
+        )
+      )
+    `)
+    .order('created_at', { ascending: false })
+
+  if (resultsError) {
+    throw new Error(`Failed to fetch quiz results: ${resultsError.message}`)
+  }
+
+  if (!results || results.length === 0) {
+    return []
+  }
+
+  // 월별로 그룹화
+  const monthlyMap = new Map<string, {
+    year: number
+    month: number
+    attempts: Array<{
+      score: number
+      user_id: string
+      threshold: number
+    }>
+  }>()
+
+  for (const result of results) {
+    const session = result.quiz_sessions as any
+    const material = session.quiz_materials as any
+    const date = new Date(result.created_at)
+    const resultYear = date.getFullYear()
+    const resultMonth = date.getMonth() + 1
+
+    // 필터링
+    if (year && resultYear !== year) continue
+    if (months && !months.includes(resultMonth)) continue
+
+    const key = `${resultYear}-${resultMonth}`
+    if (!monthlyMap.has(key)) {
+      monthlyMap.set(key, {
+        year: resultYear,
+        month: resultMonth,
+        attempts: [],
+      })
+    }
+
+    const threshold = material?.retraining_threshold || 70
+    monthlyMap.get(key)!.attempts.push({
+      score: result.score,
+      user_id: session.user_id,
+      threshold,
+    })
+  }
+
+  // 월별 통계 계산
+  const statistics: MonthlyStatistics[] = []
+
+  for (const [, data] of monthlyMap.entries()) {
+    const attempts = data.attempts
+    const totalAttempts = attempts.length
+    const uniqueUsers = new Set(attempts.map(a => a.user_id))
+    const totalUsers = uniqueUsers.size
+
+    // 전체 평균 점수
+    const averageScore = totalAttempts > 0
+      ? Math.round(attempts.reduce((sum, a) => sum + a.score, 0) / totalAttempts)
+      : 0
+
+    // 재교육 대상자 필터링 (점수가 기준 미만)
+    const retrainingAttempts = attempts.filter(a => a.score < a.threshold)
+    const retrainingUsers = new Set(retrainingAttempts.map(a => a.user_id))
+    const retrainingAttemptsCount = retrainingAttempts.length
+    const retrainingUsersCount = retrainingUsers.size
+
+    // 재교육 대상자들의 평균 점수
+    const retrainingAverageScore = retrainingAttemptsCount > 0
+      ? Math.round(retrainingAttempts.reduce((sum, a) => sum + a.score, 0) / retrainingAttemptsCount)
+      : 0
+
+    // 합격률 (재교육 기준 이상)
+    const passCount = attempts.filter(a => a.score >= a.threshold).length
+    const passRate = totalAttempts > 0
+      ? Math.round((passCount / totalAttempts) * 100)
+      : 0
+
+    statistics.push({
+      year: data.year,
+      month: data.month,
+      month_label: `${data.year}년 ${data.month}월`,
+      total_attempts: totalAttempts,
+      total_users: totalUsers,
+      average_score: averageScore,
+      retraining_attempts: retrainingAttemptsCount,
+      retraining_users: retrainingUsersCount,
+      retraining_average_score: retrainingAverageScore,
+      pass_rate: passRate,
+    })
+  }
+
+  // 최신 월부터 정렬
+  return statistics.sort((a, b) => {
+    if (a.year !== b.year) return b.year - a.year
+    return b.month - a.month
+  })
 }
 

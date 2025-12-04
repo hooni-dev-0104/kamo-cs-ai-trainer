@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react'
-import { getQuizStatistics, getRetrainingCandidates, getAllQuizAttempts } from '../../services/admin'
+import { getQuizStatistics, getRetrainingCandidates, getAllQuizAttempts, getMonthlyStatistics } from '../../services/admin'
 import { updateRetrainingThreshold } from '../../services/materials'
-import { QuizStatistics, RetrainingCandidate, QuizAttemptRecord } from '../../types/quiz'
+import { QuizStatistics, RetrainingCandidate, QuizAttemptRecord, MonthlyStatistics } from '../../types/quiz'
 
 export default function AdminStats() {
   const [statistics, setStatistics] = useState<QuizStatistics[]>([])
   const [candidates, setCandidates] = useState<RetrainingCandidate[]>([])
   const [attempts, setAttempts] = useState<QuizAttemptRecord[]>([])
+  const [monthlyStats, setMonthlyStats] = useState<MonthlyStatistics[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editingThreshold, setEditingThreshold] = useState<{ materialId: string; value: number } | null>(null)
-  const [activeView, setActiveView] = useState<'summary' | 'details'>('summary')
+  const [activeView, setActiveView] = useState<'summary' | 'details' | 'monthly'>('summary')
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
 
   useEffect(() => {
     loadData()
@@ -20,20 +22,36 @@ export default function AdminStats() {
     setLoading(true)
     setError(null)
     try {
-      const [stats, retraining, allAttempts] = await Promise.all([
+      const [stats, retraining, allAttempts, monthly] = await Promise.all([
         getQuizStatistics(),
         getRetrainingCandidates(),
         getAllQuizAttempts(),
+        getMonthlyStatistics(),
       ])
       setStatistics(stats)
       setCandidates(retraining)
       setAttempts(allAttempts)
+      setMonthlyStats(monthly)
     } catch (err) {
       setError(err instanceof Error ? err.message : '데이터를 불러오는 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (activeView === 'monthly') {
+      const loadMonthly = async () => {
+        try {
+          const monthly = await getMonthlyStatistics(selectedYear)
+          setMonthlyStats(monthly)
+        } catch (err) {
+          console.error('Failed to load monthly statistics:', err)
+        }
+      }
+      loadMonthly()
+    }
+  }, [activeView, selectedYear])
 
   const handleUpdateThreshold = async (materialId: string, newThreshold: number) => {
     try {
@@ -94,6 +112,16 @@ export default function AdminStats() {
               }`}
             >
               상세 기록 ({attempts.length}건)
+            </button>
+            <button
+              onClick={() => setActiveView('monthly')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeView === 'monthly'
+                  ? 'bg-blue-500 text-white'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              월별 통계
             </button>
           </div>
         </div>
@@ -277,6 +305,145 @@ export default function AdminStats() {
                 )}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {activeView === 'monthly' && (
+          <div className="space-y-6">
+            {/* 연도 선택 */}
+            <div className="flex items-center gap-4 mb-4">
+              <label className="text-sm font-medium text-gray-700">연도 선택:</label>
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {Array.from({ length: 5 }, (_, i) => {
+                  const year = new Date().getFullYear() - i
+                  return (
+                    <option key={year} value={year}>
+                      {year}년
+                    </option>
+                  )
+                })}
+              </select>
+            </div>
+
+            {monthlyStats.length === 0 ? (
+              <div className="text-center py-12 text-gray-500">
+                {selectedYear}년 월별 통계 데이터가 없습니다.
+              </div>
+            ) : (
+              <>
+                {/* 월별 통계 요약 카드 */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  {monthlyStats.slice(0, 3).map((stat) => (
+                    <div key={`${stat.year}-${stat.month}`} className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg">
+                      <p className="text-sm text-gray-600 mb-2">{stat.month_label}</p>
+                      <p className="text-2xl font-bold text-blue-900 mb-1">{stat.average_score}점</p>
+                      <p className="text-xs text-gray-600">평균 점수</p>
+                      <div className="mt-3 flex justify-between text-xs">
+                        <span className="text-gray-600">응시: {stat.total_attempts}회</span>
+                        <span className="text-gray-600">재교육: {stat.retraining_users}명</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 월별 통계 테이블 */}
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          월
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          총 응시
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          응시자 수
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          평균 점수
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          재교육 대상
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          재교육 평균 점수
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          합격률
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {monthlyStats.map((stat) => (
+                        <tr key={`${stat.year}-${stat.month}`} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {stat.month_label}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {stat.total_attempts}회
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {stat.total_users}명
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <span className={`font-semibold ${
+                              stat.average_score >= 80 ? 'text-green-600' :
+                              stat.average_score >= 60 ? 'text-yellow-600' : 'text-red-600'
+                            }`}>
+                              {stat.average_score}점
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                              stat.retraining_users > 0
+                                ? 'bg-red-100 text-red-800'
+                                : 'bg-green-100 text-green-800'
+                            }`}>
+                              {stat.retraining_users}명 ({stat.retraining_attempts}회)
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            {stat.retraining_attempts > 0 ? (
+                              <span className={`font-semibold ${
+                                stat.retraining_average_score >= 60 ? 'text-yellow-600' : 'text-red-600'
+                              }`}>
+                                {stat.retraining_average_score}점
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <div className="flex items-center gap-2">
+                              <span className={`font-semibold ${
+                                stat.pass_rate >= 80 ? 'text-green-600' :
+                                stat.pass_rate >= 60 ? 'text-yellow-600' : 'text-red-600'
+                              }`}>
+                                {stat.pass_rate}%
+                              </span>
+                              <div className="flex-1 bg-gray-200 rounded-full h-2 max-w-20">
+                                <div
+                                  className={`h-2 rounded-full ${
+                                    stat.pass_rate >= 80 ? 'bg-green-500' :
+                                    stat.pass_rate >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                                  }`}
+                                  style={{ width: `${stat.pass_rate}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

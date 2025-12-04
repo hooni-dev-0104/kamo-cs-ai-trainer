@@ -33,27 +33,31 @@ export async function generateAIFeedbackRecommendation(
     .map((q: any) => `문제 ${q.id}: ${q.question}\n사용자 답: ${q.userAnswer}\n정답: ${q.correctAnswer}\n해설: ${q.explanation}`)
     .join('\n\n')
 
-  const prompt = `당신은 고객 서비스 교육 전문가입니다. 다음 시험 결과를 분석하여 상담사에게 제공할 피드백을 작성해주세요.
+  const prompt = `당신은 고객 서비스 교육 전문가입니다. 다음 시험 결과를 분석하여 틀린 문항에 대한 구체적인 피드백을 작성해주세요.
 
 [시험 정보]
 - 시험명: ${materialTitle}
 - 점수: ${score}점 / 100점
 - 정답률: ${correctCount}/${totalQuestions} (${Math.round((correctCount / totalQuestions) * 100)}%)
 
-[틀린 문제 분석]
+[틀린 문제 상세]
 ${wrongQuestionsText || '틀린 문제 없음'}
 
 [요청 사항]
-1. 점수와 틀린 문제를 바탕으로 취약 영역을 분석해주세요.
-2. 상담사에게 격려와 함께 구체적인 개선 방안을 제시해주세요.
-3. 다음 JSON 형식으로 응답해주세요:
+1. 각 틀린 문항에 대해 다음을 분석해주세요:
+   - 왜 틀렸는지 (사용자 답안과 정답의 차이점)
+   - 해당 문제에서 요구하는 핵심 개념
+   - 올바른 이해를 위한 구체적인 설명
+2. 틀린 문항들을 주제별로 그룹화하여 취약 영역을 도출해주세요.
+3. 전체 피드백은 틀린 문항별 분석을 중심으로 작성하고, 격려보다는 구체적인 학습 방향을 제시해주세요.
+4. 다음 JSON 형식으로 응답해주세요:
 
 {
-  "recommendedFeedback": "피드백 내용 (200-300자)",
+  "recommendedFeedback": "틀린 문항별 구체적인 피드백 내용 (각 틀린 문항에 대한 분석 포함, 300-500자)",
   "weakAreas": [
     {
-      "area": "취약 영역명 (예: 문제 해결 능력)",
-      "description": "해당 영역에 대한 설명",
+      "area": "취약 영역명 (예: 카카오 T 정책 이해)",
+      "description": "해당 영역에서 부족한 점과 개선 방향",
       "questions": [문제 ID 배열]
     }
   ]

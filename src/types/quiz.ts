@@ -68,6 +68,20 @@ export interface QuizStatistics {
   retraining_threshold: number
 }
 
+// 월별 통계
+export interface MonthlyStatistics {
+  year: number
+  month: number
+  month_label: string // "2024년 1월" 형식
+  total_attempts: number // 총 응시 횟수
+  total_users: number // 총 응시자 수
+  average_score: number // 전체 평균 점수
+  retraining_attempts: number // 재교육 대상 응시 횟수
+  retraining_users: number // 재교육 대상자 수
+  retraining_average_score: number // 재교육 대상자들의 평균 점수
+  pass_rate: number // 합격률 (재교육 기준 이상)
+}
+
 // 재교육 대상 사용자 정보
 export interface RetrainingCandidate {
   user_id: string
