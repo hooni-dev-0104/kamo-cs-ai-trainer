@@ -34,6 +34,12 @@ export interface QuizMaterial {
   created_by: string
   created_at: string
   retraining_threshold?: number // 재교육 기준 점수 (기본값 70)
+  time_limit?: number // 시험 제한시간 (분 단위, null이면 제한 없음)
+  total_questions?: number // 총 문항 수 (기본값 10)
+  multiple_choice_count?: number // 객관식 문항 수 (기본값 5)
+  true_false_count?: number // OX 문항 수 (기본값 5)
+  required_topics?: string[] // 필수 포함 영역/키워드
+  quiz_mode?: 'ai' | 'manual' | 'both' // 출제 모드
 }
 
 // DB에 저장되는 퀴즈 세션 정보
@@ -107,11 +113,24 @@ export interface QuizAttemptRecord {
   created_at: string
 }
 
+// 틀린 문제 상세 분석
+export interface WrongQuestionAnalysis {
+  questionId: number
+  questionText: string
+  userAnswer: string
+  correctAnswer: string
+  whyWrong: string // 왜 틀렸는지 구체적 분석
+  keyConceptExplanation: string // 핵심 개념 설명
+  learningTip: string // 학습 팁
+}
+
 // 취약 영역 분석 결과
 export interface WeakArea {
   area: string // 예: "문제 해결", "전문성", "고객 이해"
   description: string
+  improvementPlan?: string // 개선 방법 및 학습 계획
   questions: number[] // 관련 문제 ID 목록
+  priority?: 'high' | 'medium' | 'low' // 우선순위
 }
 
 // 퀴즈 피드백
@@ -121,14 +140,32 @@ export interface QuizFeedback {
   user_id: string
   material_id: string
   feedback_text: string // 관리자가 작성한 피드백
-  ai_recommended_feedback?: string // AI 추천 피드백
+  ai_recommended_feedback?: string // AI 추천 피드백 요약
+  wrong_question_analysis?: WrongQuestionAnalysis[] // 틀린 문제 상세 분석
   weak_areas?: {
     areas: string[]
     details: WeakArea[]
   }
+  overall_recommendation?: string // 전체적인 학습 권장사항
   status: 'pending' | 'sent' | 'read'
   email_sent_at?: string
   read_at?: string
+  created_by?: string
+  created_at: string
+  updated_at: string
+}
+
+// 관리자가 직접 작성한 문제
+export interface ManualQuizQuestion {
+  id: string
+  material_id: string
+  question_type: 'multiple-choice' | 'true-false'
+  question: string
+  options?: string[] // 객관식 보기
+  correct_answer: string // 객관식: 정답 문자열, OX: 'true' 또는 'false'
+  explanation: string
+  order_index: number
+  is_active: boolean
   created_by?: string
   created_at: string
   updated_at: string

@@ -232,32 +232,46 @@ function FeedbackItem({
 
       {/* 피드백 내용 */}
       {isEditing ? (
-        <textarea
-          value={editingFeedback.text}
-          onChange={(e) => onTextChange(e.target.value)}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          rows={4}
-        />
+        <div>
+          <textarea
+            value={editingFeedback.text}
+            onChange={(e) => onTextChange(e.target.value)}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            rows={6}
+            placeholder="피드백 내용을 입력하세요..."
+          />
+          {/* AI 추천 피드백 참고 */}
+          {feedback.ai_recommended_feedback && (
+            <div className="mt-2 text-xs text-gray-600">
+              💡 팁: 아래 "AI 추천 피드백"을 참고하여 수정할 수 있습니다.
+            </div>
+          )}
+        </div>
       ) : (
-        <div className="bg-gray-50 rounded-lg p-4 mb-3">
-          <p className="text-gray-900 whitespace-pre-wrap">{feedback.feedback_text}</p>
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 mb-3 border border-indigo-200">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-sm font-semibold text-indigo-900">💬 피드백 내용</span>
+          </div>
+          <p className="text-sm text-gray-900 whitespace-pre-wrap leading-relaxed">{feedback.feedback_text}</p>
         </div>
       )}
 
-      {/* AI 추천 피드백 (참고용) */}
-      {feedback.ai_recommended_feedback && feedback.ai_recommended_feedback !== feedback.feedback_text && (
+      {/* AI 추천 피드백 (참고용 - 접기/펼치기) */}
+      {!isEditing && feedback.ai_recommended_feedback && feedback.ai_recommended_feedback !== feedback.feedback_text && (
         <details className="mt-3">
-          <summary className="text-sm text-gray-600 cursor-pointer hover:text-gray-900">
-            AI 추천 피드백 보기
+          <summary className="text-sm text-blue-600 cursor-pointer hover:text-blue-800 font-medium">
+            🤖 AI 추천 피드백 보기 (참고용)
           </summary>
           <div className="mt-2 bg-blue-50 rounded-lg p-4 border border-blue-200">
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">{feedback.ai_recommended_feedback}</p>
+            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{feedback.ai_recommended_feedback}</p>
             <button
               onClick={() => {
-                onTextChange(feedback.ai_recommended_feedback || '')
-                onEdit(feedback)
+                if (confirm('현재 피드백을 AI 추천 내용으로 교체하시겠습니까?')) {
+                  onTextChange(feedback.ai_recommended_feedback || '')
+                  onEdit(feedback)
+                }
               }}
-              className="mt-2 text-xs text-blue-600 hover:text-blue-800 underline"
+              className="mt-3 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
             >
               이 내용으로 교체
             </button>
@@ -271,12 +285,75 @@ function FeedbackItem({
           <h4 className="text-sm font-medium text-gray-700 mb-2">취약 영역 분석:</h4>
           <div className="flex flex-wrap gap-2">
             {feedback.weak_areas.details.map((area, idx) => (
-              <div key={idx} className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs">
+              <div key={idx} className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs flex items-center gap-2">
                 {area.area}
+                {area.priority && (
+                  <span className={`px-1.5 py-0.5 rounded text-xs ${
+                    area.priority === 'high' ? 'bg-red-200' :
+                    area.priority === 'medium' ? 'bg-orange-200' :
+                    'bg-gray-200'
+                  }`}>
+                    {area.priority === 'high' ? '높음' : area.priority === 'medium' ? '중간' : '낮음'}
+                  </span>
+                )}
               </div>
             ))}
           </div>
         </div>
+      )}
+
+      {/* 틀린 문제 상세 분석 */}
+      {feedback.wrong_question_analysis && feedback.wrong_question_analysis.length > 0 && (
+        <details className="mt-3">
+          <summary className="text-sm text-gray-600 cursor-pointer hover:text-gray-900 font-medium">
+            틀린 문제 상세 분석 ({feedback.wrong_question_analysis.length}개 문제) 보기
+          </summary>
+          <div className="mt-3 space-y-2">
+            {feedback.wrong_question_analysis.map((analysis, idx) => (
+              <div key={idx} className="bg-white rounded-lg p-4 border-l-4 border-indigo-400 shadow-sm">
+                <div className="text-sm font-semibold text-gray-900 mb-3 pb-2 border-b border-gray-200">
+                  문제 {analysis.questionId}: {analysis.questionText}
+                </div>
+                <div className="space-y-3 text-xs">
+                  <div className="flex gap-3">
+                    <span className="text-red-600 font-bold min-w-[50px]">오답:</span>
+                    <span className="text-gray-800 flex-1">{String(analysis.userAnswer)}</span>
+                  </div>
+                  <div className="flex gap-3">
+                    <span className="text-green-600 font-bold min-w-[50px]">정답:</span>
+                    <span className="text-gray-800 flex-1">{String(analysis.correctAnswer)}</span>
+                  </div>
+                  <div className="pt-2 border-t border-gray-200">
+                    <div className="mb-2">
+                      <span className="text-red-700 font-bold block mb-1">❌ 오답 분석:</span>
+                      <p className="text-gray-700 leading-relaxed pl-4">{analysis.whyWrong}</p>
+                    </div>
+                    <div className="mb-2">
+                      <span className="text-blue-700 font-bold block mb-1">📚 핵심 개념:</span>
+                      <p className="text-gray-700 leading-relaxed pl-4">{analysis.keyConceptExplanation}</p>
+                    </div>
+                    <div>
+                      <span className="text-green-700 font-bold block mb-1">💡 학습 팁:</span>
+                      <p className="text-gray-700 leading-relaxed pl-4">{analysis.learningTip}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
+      {/* 전체 학습 권장사항 */}
+      {feedback.overall_recommendation && (
+        <details className="mt-3">
+          <summary className="text-sm text-gray-600 cursor-pointer hover:text-gray-900 font-medium">
+            전체 학습 권장사항 보기
+          </summary>
+          <div className="mt-2 bg-indigo-50 rounded-lg p-4 border border-indigo-200">
+            <p className="text-sm text-gray-700 whitespace-pre-wrap">{feedback.overall_recommendation}</p>
+          </div>
+        </details>
       )}
     </div>
   )

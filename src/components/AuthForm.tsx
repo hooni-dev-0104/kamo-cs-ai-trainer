@@ -6,11 +6,14 @@ interface AuthFormProps {
   onAuthSuccess: () => void
 }
 
+export type Department = 'kmcc_yongsan' | 'kmcc_gwangju' | 'km_crew'
+
 export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
   const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
+  const [department, setDepartment] = useState<Department>('kmcc_yongsan')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showEmailVerification, setShowEmailVerification] = useState(false)
@@ -60,7 +63,7 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
       return
     }
 
-    // 이름 검증 (회원가입 시 - 필수)
+    // 이름 및 소속 검증 (회원가입 시 - 필수)
     if (!isLogin) {
       if (!name || !name.trim()) {
         setError('이름을 입력해주세요.')
@@ -68,6 +71,10 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
       }
       if (name.trim().length > 100) {
         setError('이름은 최대 100자까지 가능합니다.')
+        return
+      }
+      if (!department) {
+        setError('소속을 선택해주세요.')
         return
       }
     }
@@ -79,8 +86,8 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
         await signIn(email.trim(), password)
         onAuthSuccess()
       } else {
-        // 이름이 필수이므로 이미 검증됨
-        const { session } = await signUp(email.trim(), password, name.trim())
+        // 이름과 소속이 필수이므로 이미 검증됨
+        const { session } = await signUp(email.trim(), password, name.trim(), department)
         
         if (session) {
           onAuthSuccess()
@@ -166,20 +173,39 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {!isLogin && (
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                이름 <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="홍길동"
-              />
-            </div>
+            <>
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                  이름 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="홍길동"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-1">
+                  소속 <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="department"
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value as Department)}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                >
+                  <option value="kmcc_yongsan">KMCC 용산</option>
+                  <option value="kmcc_gwangju">KMCC 광주</option>
+                  <option value="km_crew">KM 크루</option>
+                </select>
+              </div>
+            </>
           )}
 
           <div>

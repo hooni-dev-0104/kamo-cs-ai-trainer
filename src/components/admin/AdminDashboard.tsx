@@ -3,6 +3,7 @@ import AdminUserList from './AdminUserList'
 import AdminStats from './AdminStats'
 import AdminScenarioManager from './AdminScenarioManager'
 import AdminFeedbackManager from './AdminFeedbackManager'
+import AdminQuizResultViewer from './AdminQuizResultViewer'
 import QuizHome from '../quiz/QuizHome'
 import { QuizSet, QuizDifficulty } from '../../types/quiz'
 
@@ -11,7 +12,7 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ onQuizGenerated }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'users' | 'materials' | 'stats' | 'scenarios' | 'feedbacks'>('stats')
+  const [activeTab, setActiveTab] = useState<'users' | 'materials' | 'stats' | 'scenarios' | 'feedbacks' | 'results'>('stats')
 
   return (
     <div className="max-w-6xl mx-auto p-6">
@@ -70,6 +71,16 @@ export default function AdminDashboard({ onQuizGenerated }: AdminDashboardProps)
         >
           피드백 관리
         </button>
+        <button
+          className={`py-2 px-6 rounded-md font-medium transition-colors ${
+            activeTab === 'results' 
+              ? 'bg-blue-500 text-white shadow-sm' 
+              : 'text-gray-600 hover:bg-gray-50'
+          }`}
+          onClick={() => setActiveTab('results')}
+        >
+          시험 결과 조회
+        </button>
       </div>
 
       {activeTab === 'stats' ? (
@@ -80,6 +91,8 @@ export default function AdminDashboard({ onQuizGenerated }: AdminDashboardProps)
         <AdminUserList />
       ) : activeTab === 'feedbacks' ? (
         <AdminFeedbackManager />
+      ) : activeTab === 'results' ? (
+        <AdminQuizResultViewer />
       ) : (
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-bold mb-4">학습 자료 관리</h2>

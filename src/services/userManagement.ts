@@ -1,9 +1,13 @@
 import { supabase } from './supabase'
 
+export type DepartmentType = 'kmcc_yongsan' | 'kmcc_gwangju' | 'km_crew'
+
 export interface UserProfile {
   id: string
   email: string
+  name?: string
   role: 'admin' | 'user'
+  department?: DepartmentType | null
   created_at: string
 }
 
@@ -35,6 +39,35 @@ export async function updateUserRole(userId: string, role: 'admin' | 'user'): Pr
   if (error) {
     throw new Error(`Failed to update user role: ${error.message}`)
   }
+}
+
+/**
+ * 사용자 소속 변경하기 (관리자 전용)
+ */
+export async function updateUserDepartment(userId: string, department: DepartmentType | null): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ department })
+    .eq('id', userId)
+
+  if (error) {
+    throw new Error(`Failed to update user department: ${error.message}`)
+  }
+}
+
+/**
+ * 소속 이름 변환 헬퍼 함수
+ */
+export function getDepartmentLabel(department: DepartmentType | null | undefined): string {
+  if (!department) return '미지정'
+  
+  const labels: Record<DepartmentType, string> = {
+    kmcc_yongsan: 'KMCC 용산',
+    kmcc_gwangju: 'KMCC 광주',
+    km_crew: 'KM 크루'
+  }
+  
+  return labels[department] || '미지정'
 }
 
 /**

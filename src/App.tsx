@@ -25,6 +25,7 @@ import { getCurrentUserProfile } from './services/userManagement'
 import { createQuizSession, saveQuizResult } from './services/quizSessions'
 import { generateAIFeedbackRecommendation, createQuizFeedback } from './services/quizFeedback'
 import { getQuizMaterials } from './services/materials'
+import { QuizMaterial } from './types/quiz'
 import { User } from '@supabase/supabase-js'
 
 function App() {
@@ -47,6 +48,7 @@ function App() {
   const [quizSet, setQuizSet] = useState<QuizSet | null>(null)
   const [quizResult, setQuizResult] = useState<QuizResultType | null>(null)
   const [quizSessionId, setQuizSessionId] = useState<string | null>(null)
+  const [currentQuizMaterial, setCurrentQuizMaterial] = useState<QuizMaterial | null>(null)
 
   // 공통 상태
   const [loading, setLoading] = useState(false)
@@ -375,6 +377,15 @@ function App() {
   const handleQuizGenerated = async (generatedQuizSet: QuizSet, materialId: string, difficulty: QuizDifficulty) => {
     setQuizSet(generatedQuizSet)
     
+    // 현재 퀴즈 자료 정보 저장 (제한시간 정보 포함)
+    try {
+      const materials = await getQuizMaterials()
+      const material = materials.find(m => m.id === materialId)
+      setCurrentQuizMaterial(material || null)
+    } catch (err) {
+      console.error('Failed to load material info:', err)
+    }
+    
     // 퀴즈 세션 생성 (DB 저장)
     if (user) {
       try {
@@ -434,32 +445,68 @@ function App() {
               const material = materials.find(m => m.id === quizSet.materialId)
               const threshold = material?.retraining_threshold || 70
 
-              if (result.score < threshold) {
-                // 재교육 대상: AI 피드백 추천 생성
-                const aiFeedback = await generateAIFeedbackRecommendation(
-                  quizSet.title,
-                  result.score,
-                  result.totalQuestions,
-                  result.correctCount,
-                  result.wrongQuestions,
-                  result.userAnswers,
-                  quizSet.questions
-                )
+              console.log('📊 퀴즈 결과:', {
+                score: result.score,
+                threshold,
+                isRetraining: result.score < threshold,
+                materialId: quizSet.materialId
+              })
 
-                // 피드백 생성 (pending 상태로 저장, 관리자가 검토 후 전송)
-                await createQuizFeedback(
-                  quizResultId,
-                  user.id,
-                  quizSet.materialId,
-                  aiFeedback.recommendedFeedback, // 기본값으로 AI 추천 피드백 사용
-                  aiFeedback.recommendedFeedback,
-                  {
-                    areas: aiFeedback.weakAreas.map(wa => wa.area),
-                    details: aiFeedback.weakAreas,
-                  }
-                )
+              if (result.score < threshold) {
+                console.log('🎯 재교육 대상 - AI 피드백 생성 시작...')
+                console.log('틀린 문제:', result.wrongQuestions)
+                console.log('사용자 답변:', result.userAnswers)
+                
+                try {
+                  // 재교육 대상: AI 피드백 추천 생성
+                  const aiFeedback = await generateAIFeedbackRecommendation(
+                    quizSet.title,
+                    result.score,
+                    result.totalQuestions,
+                    result.correctCount,
+                    result.wrongQuestions,
+                    result.userAnswers,
+                    quizSet.questions
+                  )
+
+                  console.log('✅ AI 피드백 생성 완료:', {
+                    recommendedFeedback: aiFeedback.recommendedFeedback?.substring(0, 100) + '...',
+                    wrongQuestionAnalysisCount: aiFeedback.wrongQuestionAnalysis?.length || 0,
+                    weakAreasCount: aiFeedback.weakAreas?.length || 0,
+                    hasOverallRecommendation: !!aiFeedback.overallRecommendation
+                  })
+
+                  // 피드백 생성 (pending 상태로 저장, 관리자가 검토 후 전송)
+                  const savedFeedback = await createQuizFeedback(
+                    quizResultId,
+                    user.id,
+                    quizSet.materialId,
+                    aiFeedback.recommendedFeedback, // 기본값으로 AI 추천 피드백 사용
+                    aiFeedback.recommendedFeedback,
+                    {
+                      areas: aiFeedback.weakAreas.map(wa => wa.area),
+                      details: aiFeedback.weakAreas,
+                    },
+                    aiFeedback.wrongQuestionAnalysis, // 틀린 문제 상세 분석 추가
+                    aiFeedback.overallRecommendation // 전체 학습 권장사항 추가
+                  )
+
+                  console.log('✅ 피드백 DB 저장 완료:', savedFeedback.id)
+                  alert('✅ 피드백이 생성되었습니다! 프로필 페이지에서 확인하실 수 있습니다.')
+                } catch (feedbackGenErr) {
+                  console.error('❌ 피드백 생성 실패:', feedbackGenErr)
+                  console.error('에러 상세:', {
+                    name: feedbackGenErr instanceof Error ? feedbackGenErr.name : 'Unknown',
+                    message: feedbackGenErr instanceof Error ? feedbackGenErr.message : String(feedbackGenErr),
+                    stack: feedbackGenErr instanceof Error ? feedbackGenErr.stack : undefined
+                  })
+                  alert('⚠️ 피드백 생성 중 오류가 발생했습니다. 콘솔을 확인해주세요.')
+                }
+              } else {
+                console.log('✅ 합격 - 피드백 생성 안 함 (점수: ' + result.score + ' >= 기준: ' + threshold + ')')
               }
             } catch (feedbackErr) {
+              console.error('❌ 피드백 처리 중 전체 오류:', feedbackErr)
               // 피드백 생성 실패해도 계속 진행
             }
           } catch (resultErr) {
@@ -733,7 +780,11 @@ function App() {
         )}
 
         {currentStep === 'quiz-solver' && quizSet && (
-          <QuizSolver quizSet={quizSet} onComplete={handleQuizComplete} />
+          <QuizSolver 
+            quizSet={quizSet} 
+            material={currentQuizMaterial || undefined}
+            onComplete={handleQuizComplete} 
+          />
         )}
 
         {currentStep === 'quiz-result' && quizSet && quizResult && (

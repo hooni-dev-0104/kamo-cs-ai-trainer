@@ -235,6 +235,7 @@ interface QuizFeedbackItemProps {
 
 function QuizFeedbackItem({ feedback, onRead }: QuizFeedbackItemProps) {
   const [materialTitle, setMaterialTitle] = useState<string>('로딩 중...')
+  const [isExpanded, setIsExpanded] = useState(false)
   const isUnread = feedback.status === 'sent' || feedback.status === 'pending'
 
   useEffect(() => {
@@ -248,11 +249,14 @@ function QuizFeedbackItem({ feedback, onRead }: QuizFeedbackItemProps) {
       })
   }, [feedback.material_id])
 
+  const hasDetailedAnalysis = feedback.wrong_question_analysis && feedback.wrong_question_analysis.length > 0
+
   return (
-    <div className={`border rounded-lg p-4 ${isUnread ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-50'}`}>
-      <div className="flex justify-between items-start mb-2">
+    <div className={`border rounded-lg p-5 ${isUnread ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+      {/* 헤더 */}
+      <div className="flex justify-between items-start mb-3">
         <div>
-          <h3 className="font-semibold text-gray-900">{materialTitle}</h3>
+          <h3 className="font-semibold text-lg text-gray-900">{materialTitle}</h3>
           <p className="text-xs text-gray-500 mt-1">
             {new Date(feedback.created_at).toLocaleString('ko-KR')}
           </p>
@@ -260,25 +264,139 @@ function QuizFeedbackItem({ feedback, onRead }: QuizFeedbackItemProps) {
         {isUnread && (
           <button
             onClick={onRead}
-            className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+            className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
           >
             읽음 처리
           </button>
         )}
       </div>
-      <div className="mt-3">
-        <p className="text-gray-800 whitespace-pre-wrap">{feedback.feedback_text}</p>
-      </div>
+
+      {/* 피드백 내용 (AI + 관리자 통합) */}
+      {feedback.feedback_text && (
+        <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-indigo-200">
+          <h4 className="text-sm font-semibold text-indigo-900 mb-2 flex items-center gap-2">
+            <span>💬</span> 피드백
+          </h4>
+          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{feedback.feedback_text}</p>
+        </div>
+      )}
+
+      {/* 취약 영역 */}
       {feedback.weak_areas && feedback.weak_areas.details && feedback.weak_areas.details.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-gray-200">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">개선이 필요한 영역:</h4>
-          <div className="flex flex-wrap gap-2">
+        <div className="mb-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+          <h4 className="text-sm font-semibold text-yellow-900 mb-3 flex items-center gap-2">
+            <span>⚠️</span> 개선이 필요한 영역
+          </h4>
+          <div className="space-y-3">
             {feedback.weak_areas.details.map((area, idx) => (
-              <div key={idx} className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">
-                {area.area}
+              <div key={idx} className="bg-white rounded-lg p-3 border border-yellow-100">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-semibold text-gray-900">{area.area}</span>
+                  {area.priority && (
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      area.priority === 'high' ? 'bg-red-100 text-red-700' :
+                      area.priority === 'medium' ? 'bg-orange-100 text-orange-700' :
+                      'bg-gray-100 text-gray-700'
+                    }`}>
+                      {area.priority === 'high' ? '높음' : area.priority === 'medium' ? '중간' : '낮음'}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-700 mb-2">{area.description}</p>
+                {area.improvementPlan && (
+                  <div className="mt-2 pt-2 border-t border-yellow-100">
+                    <p className="text-xs font-medium text-yellow-800 mb-1">💡 개선 방법</p>
+                    <p className="text-xs text-gray-600">{area.improvementPlan}</p>
+                  </div>
+                )}
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {area.questions.map(qNum => (
+                    <span key={qNum} className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded">
+                      Q{qNum}
+                    </span>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* 틀린 문제 상세 분석 (접기/펼치기) */}
+      {hasDetailedAnalysis && (
+        <div className="mt-4">
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="w-full flex items-center justify-between p-3 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors"
+          >
+            <span className="text-sm font-semibold text-indigo-900 flex items-center gap-2">
+              <span>🔍</span> 틀린 문제 상세 분석 ({feedback.wrong_question_analysis?.length}개)
+            </span>
+            <span className="text-indigo-600">{isExpanded ? '▼' : '▶'}</span>
+          </button>
+
+          {isExpanded && (
+            <div className="mt-3 space-y-3">
+              {feedback.wrong_question_analysis?.map((analysis, idx) => (
+                <div key={idx} className="bg-white rounded-lg p-4 border-2 border-red-100">
+                  <div className="flex items-start gap-3 mb-3">
+                    <span className="flex-shrink-0 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-sm">
+                      X
+                    </span>
+                    <div className="flex-1">
+                      <h5 className="font-semibold text-gray-900 mb-1">
+                        문제 {analysis.questionId}. {analysis.questionText}
+                      </h5>
+                      <div className="text-xs space-y-1">
+                        <div className="flex gap-2">
+                          <span className="text-red-600 font-medium">오답:</span>
+                          <span className="text-gray-700">{String(analysis.userAnswer)}</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className="text-green-600 font-medium">정답:</span>
+                          <span className="text-gray-700">{String(analysis.correctAnswer)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 왜 틀렸는지 */}
+                  <div className="mb-3 p-4 bg-red-50 rounded-lg border-l-4 border-red-400">
+                    <p className="text-sm font-bold text-red-900 mb-2 flex items-center gap-2">
+                      <span className="text-base">❌</span> 왜 틀렸을까요?
+                    </p>
+                    <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{analysis.whyWrong}</p>
+                  </div>
+
+                  {/* 핵심 개념 */}
+                  <div className="mb-3 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-400">
+                    <p className="text-sm font-bold text-blue-900 mb-2 flex items-center gap-2">
+                      <span className="text-base">📚</span> 핵심 개념 및 정답 해설
+                    </p>
+                    <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{analysis.keyConceptExplanation}</p>
+                  </div>
+
+                  {/* 학습 팁 */}
+                  <div className="p-4 bg-green-50 rounded-lg border-l-4 border-green-400">
+                    <p className="text-sm font-bold text-green-900 mb-2 flex items-center gap-2">
+                      <span className="text-base">💡</span> 학습 팁 & 실천 방법
+                    </p>
+                    <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{analysis.learningTip}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 전체 학습 권장사항 */}
+      {feedback.overall_recommendation && (
+        <div className="mt-4 p-4 bg-indigo-50 rounded-lg border border-indigo-200">
+          <h4 className="text-sm font-semibold text-indigo-900 mb-2 flex items-center gap-2">
+            <span>🚀</span> 다음 단계
+          </h4>
+          <p className="text-sm text-gray-700 leading-relaxed">{feedback.overall_recommendation}</p>
         </div>
       )}
     </div>

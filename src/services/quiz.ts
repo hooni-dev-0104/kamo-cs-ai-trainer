@@ -113,11 +113,23 @@ export async function extractTextFromZip(file: File): Promise<string> {
  */
 export async function generateQuizFromMaterials(
   materialsText: string,
-  difficulty: QuizDifficulty = 'medium'
+  difficulty: QuizDifficulty = 'medium',
+  settings?: {
+    total_questions?: number
+    multiple_choice_count?: number
+    true_false_count?: number
+    required_topics?: string[]
+  }
 ): Promise<QuizSet> {
   if (!GOOGLE_CLOUD_API_KEY) {
     throw new Error('Google Cloud API Key가 설정되지 않았습니다.')
   }
+
+  // 설정값 적용
+  const totalQuestions = settings?.total_questions || 10
+  const mcCount = settings?.multiple_choice_count || 5
+  const tfCount = settings?.true_false_count || 5
+  const requiredTopics = settings?.required_topics || []
 
   // 난이도별 설명
   const difficultyDescription = {
@@ -126,6 +138,10 @@ export async function generateQuizFromMaterials(
     hard: '학습 자료를 깊이 이해하고 응용할 수 있어야 풀 수 있는 어려운 문제로 출제해주세요. 세부 사항과 맥락을 파악해야 합니다.'
   }
 
+  const requiredTopicsText = requiredTopics.length > 0 
+    ? `\n7. 다음 영역/키워드를 반드시 포함해주세요: ${requiredTopics.join(', ')}`
+    : ''
+
   const prompt = `
 당신은 신입사원 교육 평가 전문가입니다. 제공된 학습 자료를 바탕으로 학습 성취도를 평가할 수 있는 시험 문제를 출제해주세요.
 
@@ -133,12 +149,12 @@ export async function generateQuizFromMaterials(
 ${materialsText.substring(0, 100000)} // 너무 길 경우를 대비해 일부 제한 (Gemini 2.0 Flash는 컨텍스트가 길지만 안전하게)
 
 [요청 사항]
-1. 총 10문제를 출제해주세요.
-2. 1번~5번: 4지선다 객관식 (multiple-choice)
-3. 6번~10번: O/X 퀴즈 (true-false)
+1. 총 ${totalQuestions}문제를 출제해주세요.
+2. 1번~${mcCount}번: 4지선다 객관식 (multiple-choice)
+3. ${mcCount + 1}번~${totalQuestions}번: O/X 퀴즈 (true-false)
 4. 난이도: ${difficultyDescription[difficulty]}
 5. 각 문제에는 명확한 정답과 친절한 해설을 포함해주세요.
-6. 반드시 아래 JSON 형식으로만 응답해주세요. (Markdown 코드 블록 없이 순수 JSON)
+6. 반드시 아래 JSON 형식으로만 응답해주세요. (Markdown 코드 블록 없이 순수 JSON)${requiredTopicsText}
 
 [출력 JSON 형식]
 {

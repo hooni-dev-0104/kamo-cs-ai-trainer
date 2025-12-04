@@ -542,7 +542,26 @@ JSON만 응답하고 다른 텍스트는 포함하지 마세요.`
  */
 export async function generateFeedbackRecommendation(
   prompt: string
-): Promise<{ recommendedFeedback: string; weakAreas: Array<{ area: string; description: string; questions: number[] }> }> {
+): Promise<{ 
+  recommendedFeedback: string
+  wrongQuestionAnalysis?: Array<{
+    questionId: number
+    questionText: string
+    userAnswer: string
+    correctAnswer: string
+    whyWrong: string
+    keyConceptExplanation: string
+    learningTip: string
+  }>
+  weakAreas: Array<{ 
+    area: string
+    description: string
+    improvementPlan?: string
+    questions: number[]
+    priority?: 'high' | 'medium' | 'low'
+  }>
+  overallRecommendation?: string
+}> {
   return withRetry(async () => {
     let response: Response
     try {
@@ -564,11 +583,11 @@ export async function generateFeedbackRecommendation(
               },
             ],
             generationConfig: {
-              temperature: 0.7,
+              temperature: 0.8,
               topK: 40,
               topP: 0.95,
-              maxOutputTokens: 1024,
-              response_mime_type: 'application/json',
+              maxOutputTokens: 4096,
+              responseMimeType: 'application/json',
             },
           }),
         }
@@ -590,19 +609,41 @@ export async function generateFeedbackRecommendation(
     const data = await response.json()
     const content = data.candidates?.[0]?.content?.parts?.[0]?.text
 
+    console.log('🤖 Gemini API 응답:', {
+      hasData: !!data,
+      hasCandidates: !!data.candidates,
+      candidatesLength: data.candidates?.length,
+      hasContent: !!content,
+      contentPreview: content?.substring(0, 200)
+    })
+
     if (!content) {
+      console.error('❌ AI 응답 없음:', data)
       throw new Error('AI로부터 응답을 받을 수 없습니다. 다시 시도해주세요.')
     }
 
     try {
+      console.log('📝 파싱 시도:', content.substring(0, 500))
       const parsed = JSON.parse(content)
+      
+      console.log('✅ 파싱 성공:', {
+        hasRecommendedFeedback: !!parsed.recommendedFeedback,
+        wrongQuestionAnalysisCount: parsed.wrongQuestionAnalysis?.length || 0,
+        weakAreasCount: parsed.weakAreas?.length || 0,
+        hasOverallRecommendation: !!parsed.overallRecommendation
+      })
+
       return {
         recommendedFeedback: parsed.recommendedFeedback || '',
+        wrongQuestionAnalysis: parsed.wrongQuestionAnalysis || [],
         weakAreas: parsed.weakAreas || [],
+        overallRecommendation: parsed.overallRecommendation || '',
       }
     } catch (error) {
+      console.error('❌ JSON 파싱 실패:', error)
+      console.error('원본 응답:', content)
       if (error instanceof SyntaxError) {
-        throw new Error('피드백 데이터를 파싱할 수 없습니다. 다시 시도해주세요.')
+        throw new Error('피드백 데이터를 파싱할 수 없습니다. AI 응답 형식이 올바르지 않습니다.')
       }
       throw error
     }
