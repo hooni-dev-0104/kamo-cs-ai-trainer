@@ -210,7 +210,7 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
 
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-              이메일
+              이메일 <span className="text-red-500">*</span>
             </label>
             <input
               id="email"
@@ -225,7 +225,7 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
 
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              비밀번호
+              비밀번호 <span className="text-red-500">*</span>
             </label>
             <input
               id="password"
