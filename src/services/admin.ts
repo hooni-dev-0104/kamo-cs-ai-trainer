@@ -17,7 +17,6 @@ export async function getQuizStatistics(): Promise<QuizStatistics[]> {
     
     if (error) throw error
     materials = data || []
-    console.log('Loaded materials:', materials.length)
   } catch (err: any) {
     // retraining_threshold 컬럼이 없으면 기본 컬럼만 조회
     if (err.message?.includes('retraining_threshold')) {
@@ -48,11 +47,8 @@ export async function getQuizStatistics(): Promise<QuizStatistics[]> {
       .eq('material_id', material.id)
 
     if (sessionsError) {
-      console.error(`Failed to fetch sessions for material ${material.id}:`, sessionsError)
       continue
     }
-
-    console.log(`Material ${material.title}: ${sessions?.length || 0} sessions`)
 
     const sessionIds = (sessions || []).map(s => s.id)
     const uniqueUserIds = new Set((sessions || []).map(s => s.user_id))
@@ -77,11 +73,8 @@ export async function getQuizStatistics(): Promise<QuizStatistics[]> {
       .in('session_id', sessionIds)
 
     if (resultsError) {
-      console.error(`Failed to fetch results for material ${material.id}:`, resultsError)
       continue
     }
-
-    console.log(`Material ${material.title}: ${results?.length || 0} results`)
 
     const scores = (results || []).map(r => r.score)
     const averageScore = scores.length > 0
@@ -154,7 +147,6 @@ export async function getRetrainingCandidates(): Promise<RetrainingCandidate[]> 
       .order('created_at', { ascending: false })
 
     if (sessionsError) {
-      console.error(`Failed to fetch sessions for material ${material.id}:`, sessionsError)
       continue
     }
 
@@ -223,7 +215,6 @@ export async function getAllQuizAttempts(): Promise<QuizAttemptRecord[]> {
     .order('created_at', { ascending: false })
 
   if (sessionsError) {
-    console.error('Failed to fetch quiz sessions:', sessionsError)
     throw new Error(`Failed to fetch quiz attempts: ${sessionsError.message}`)
   }
 
@@ -238,10 +229,9 @@ export async function getAllQuizAttempts(): Promise<QuizAttemptRecord[]> {
       .order('created_at', { ascending: false })
       .limit(1)
 
-    if (resultsError || !results || results.length === 0) {
-      console.log(`No results for session ${session.id}`)
-      continue // 결과가 없으면 스킵
-    }
+      if (resultsError || !results || results.length === 0) {
+        continue // 결과가 없으면 스킵
+      }
 
     const result = results[0]
 
@@ -273,7 +263,6 @@ export async function getAllQuizAttempts(): Promise<QuizAttemptRecord[]> {
     })
   }
 
-  console.log(`Loaded ${attempts.length} quiz attempts`)
   return attempts
 }
 

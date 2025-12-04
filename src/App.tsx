@@ -25,7 +25,6 @@ import { getCurrentUserProfile } from './services/userManagement'
 import { createQuizSession, saveQuizResult } from './services/quizSessions'
 import { generateAIFeedbackRecommendation, createQuizFeedback } from './services/quizFeedback'
 import { getQuizMaterials } from './services/materials'
-import { supabase } from './services/supabase'
 import { User } from '@supabase/supabase-js'
 
 function App() {
@@ -403,10 +402,6 @@ function App() {
 
         // 세션이 없으면 지금 생성
         if (!sessionId) {
-          console.log('Quiz session not found, creating new session...', {
-            materialId: quizSet.materialId,
-            difficulty: quizSet.difficulty || 'medium'
-          })
           try {
             const session = await createQuizSession(
               quizSet.materialId,
@@ -414,9 +409,7 @@ function App() {
             )
             sessionId = session.id
             setQuizSessionId(sessionId)
-            console.log('Quiz session created:', sessionId)
           } catch (sessionErr) {
-            console.error('Failed to create quiz session:', sessionErr)
             // 세션 생성 실패해도 통계는 업데이트
           }
         }
@@ -434,7 +427,6 @@ function App() {
               result.userAnswers
             )
             quizResultId = savedResult.id
-            console.log('Quiz result saved successfully:', quizResultId)
 
             // 재교육 대상 여부 판단 및 피드백 생성
             try {
@@ -444,7 +436,6 @@ function App() {
 
               if (result.score < threshold) {
                 // 재교육 대상: AI 피드백 추천 생성
-                console.log('User is retraining candidate, generating AI feedback recommendation...')
                 const aiFeedback = await generateAIFeedbackRecommendation(
                   quizSet.title,
                   result.score,
@@ -467,14 +458,11 @@ function App() {
                     details: aiFeedback.weakAreas,
                   }
                 )
-                console.log('Feedback created for retraining candidate')
               }
             } catch (feedbackErr) {
-              console.error('Failed to create feedback:', feedbackErr)
               // 피드백 생성 실패해도 계속 진행
             }
           } catch (resultErr) {
-            console.error('Failed to save quiz result:', resultErr)
             // 결과 저장 실패해도 통계는 업데이트
           }
         }
@@ -499,14 +487,8 @@ function App() {
           setEarnedBadges(earned)
         }
       } catch (err) {
-        console.error('Failed to update stats:', err)
         // 에러가 발생해도 사용자에게는 결과를 보여줌
       }
-    } else {
-      console.warn('Cannot save quiz result: missing user or materialId', {
-        user: !!user,
-        materialId: quizSet?.materialId
-      })
     }
   }
 

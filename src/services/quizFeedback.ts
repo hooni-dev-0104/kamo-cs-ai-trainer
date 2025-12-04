@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { QuizFeedback, WeakArea, QuizResult } from '../types/quiz'
+import { QuizFeedback, WeakArea } from '../types/quiz'
 import { generateFeedbackRecommendation } from './google-cloud'
 
 /**

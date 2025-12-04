@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getAllQuizFeedbacks, updateQuizFeedback } from '../../services/quizFeedback'
 import { QuizFeedback } from '../../types/quiz'
-import { getCurrentUserProfile } from '../../services/userManagement'
 import { supabase } from '../../services/supabase'
 
 export default function AdminFeedbackManager() {
@@ -53,8 +52,6 @@ export default function AdminFeedbackManager() {
   }
 
   const handleSendFeedback = async (feedback: QuizFeedback) => {
-    if (!confirm(`피드백을 ${feedback.user_id}에게 이메일로 전송하시겠습니까?`)) return
-
     try {
       // 사용자 이메일 및 학습 자료 정보 가져오기
       const [userResult, materialResult] = await Promise.all([
@@ -78,6 +75,8 @@ export default function AdminFeedbackManager() {
         alert('사용자 이메일을 찾을 수 없습니다.')
         return
       }
+
+      if (!confirm(`피드백을 ${userEmail}에게 이메일로 전송하시겠습니까?`)) return
 
       // 퀴즈 결과에서 점수 가져오기
       const { data: quizResult } = await supabase
@@ -114,15 +113,6 @@ export default function AdminFeedbackManager() {
       console.error('Failed to send feedback email:', err)
       alert(err instanceof Error ? err.message : '피드백 전송에 실패했습니다.')
     }
-  }
-
-  const getUserEmail = async (userId: string): Promise<string> => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('email')
-      .eq('id', userId)
-      .single()
-    return data?.email || '알 수 없음'
   }
 
   if (loading) {

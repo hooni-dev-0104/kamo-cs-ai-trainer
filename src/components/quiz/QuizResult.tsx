@@ -11,12 +11,10 @@ interface QuizResultProps {
 
 export default function QuizResult({ quizSet, result, onRetry, onHome }: QuizResultProps) {
   const [retrainingThreshold, setRetrainingThreshold] = useState<number>(70)
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const loadThreshold = async () => {
       if (!quizSet.materialId) {
-        setLoading(false)
         return
       }
       try {
@@ -26,9 +24,7 @@ export default function QuizResult({ quizSet, result, onRetry, onHome }: QuizRes
           setRetrainingThreshold(material.retraining_threshold)
         }
       } catch (err) {
-        console.error('Failed to load retraining threshold:', err)
-      } finally {
-        setLoading(false)
+        // 기본값 사용
       }
     }
     loadThreshold()

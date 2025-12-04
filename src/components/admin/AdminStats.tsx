@@ -28,13 +28,7 @@ export default function AdminStats() {
       setStatistics(stats)
       setCandidates(retraining)
       setAttempts(allAttempts)
-      console.log('Loaded data:', {
-        stats: stats.length,
-        candidates: candidates.length,
-        attempts: allAttempts.length
-      })
     } catch (err) {
-      console.error('Failed to load data:', err)
       setError(err instanceof Error ? err.message : '데이터를 불러오는 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
