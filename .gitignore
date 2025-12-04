@@ -120,6 +120,7 @@ Desktop.ini
 
 # Supabase
 .supabase/
+supabase/.temp/
 
 # Vercel
 .vercel

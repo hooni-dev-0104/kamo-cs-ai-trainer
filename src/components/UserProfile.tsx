@@ -5,6 +5,7 @@ import { User } from '@supabase/supabase-js'
 import { QuizFeedback } from '../types/quiz'
 import BadgeCollection from './BadgeCollection'
 import { getUserQuizFeedbacks, markFeedbackAsRead } from '../services/quizFeedback'
+import { getUserScenarioFeedbacks, ScenarioFeedbackWithDetails } from '../services/scenarioFeedback'
 import { supabase } from '../services/supabase'
 
 interface UserProfileProps {
@@ -15,8 +16,10 @@ interface UserProfileProps {
 export default function UserProfile({ user, userStats }: UserProfileProps) {
   const [stats, setStats] = useState<UserStats | null>(userStats || null)
   const [loading, setLoading] = useState(!userStats)
-  const [feedbacks, setFeedbacks] = useState<QuizFeedback[]>([])
+  const [quizFeedbacks, setQuizFeedbacks] = useState<QuizFeedback[]>([])
+  const [scenarioFeedbacks, setScenarioFeedbacks] = useState<ScenarioFeedbackWithDetails[]>([])
   const [loadingFeedbacks, setLoadingFeedbacks] = useState(false)
+  const [feedbackTab, setFeedbackTab] = useState<'quiz' | 'scenario'>('quiz')
 
   useEffect(() => {
     // props로 전달받은 경우 로딩 불필요
@@ -47,8 +50,12 @@ export default function UserProfile({ user, userStats }: UserProfileProps) {
     const loadFeedbacks = async () => {
       setLoadingFeedbacks(true)
       try {
-        const userFeedbacks = await getUserQuizFeedbacks(user.id)
-        setFeedbacks(userFeedbacks)
+        const [quizFeedbacksData, scenarioFeedbacksData] = await Promise.all([
+          getUserQuizFeedbacks(user.id),
+          getUserScenarioFeedbacks(user.id),
+        ])
+        setQuizFeedbacks(quizFeedbacksData)
+        setScenarioFeedbacks(scenarioFeedbacksData)
       } catch (err) {
         console.error('Failed to load feedbacks:', err)
       } finally {
@@ -62,7 +69,7 @@ export default function UserProfile({ user, userStats }: UserProfileProps) {
   const handleReadFeedback = async (feedbackId: string) => {
     try {
       await markFeedbackAsRead(feedbackId)
-      setFeedbacks(prev => prev.map(f => 
+      setQuizFeedbacks(prev => prev.map(f => 
         f.id === feedbackId 
           ? { ...f, status: 'read' as const, read_at: new Date().toISOString() }
           : f
@@ -159,35 +166,74 @@ export default function UserProfile({ user, userStats }: UserProfileProps) {
       <div className="bg-white rounded-lg shadow-md p-6">
         <h2 className="text-2xl font-bold mb-4">받은 피드백</h2>
         
+        {/* 탭 메뉴 */}
+        <div className="flex border-b mb-4">
+          <button
+            onClick={() => setFeedbackTab('quiz')}
+            className={`px-4 py-2 font-medium transition-colors ${
+              feedbackTab === 'quiz'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            퀴즈 피드백 ({quizFeedbacks.length})
+          </button>
+          <button
+            onClick={() => setFeedbackTab('scenario')}
+            className={`px-4 py-2 font-medium transition-colors ${
+              feedbackTab === 'scenario'
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            음성 상담 피드백 ({scenarioFeedbacks.length})
+          </button>
+        </div>
+        
         {loadingFeedbacks ? (
           <div className="text-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
             <p className="text-gray-600 text-sm">피드백을 불러오는 중...</p>
           </div>
-        ) : feedbacks.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">받은 피드백이 없습니다.</p>
+        ) : feedbackTab === 'quiz' ? (
+          quizFeedbacks.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">받은 퀴즈 피드백이 없습니다.</p>
+          ) : (
+            <div className="space-y-4">
+              {quizFeedbacks.map((feedback) => (
+                <QuizFeedbackItem
+                  key={feedback.id}
+                  feedback={feedback}
+                  onRead={() => handleReadFeedback(feedback.id)}
+                />
+              ))}
+            </div>
+          )
         ) : (
-          <div className="space-y-4">
-            {feedbacks.map((feedback) => (
-              <UserFeedbackItem
-                key={feedback.id}
-                feedback={feedback}
-                onRead={() => handleReadFeedback(feedback.id)}
-              />
-            ))}
-          </div>
+          scenarioFeedbacks.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">받은 음성 상담 피드백이 없습니다.</p>
+          ) : (
+            <div className="space-y-4">
+              {scenarioFeedbacks.map((feedback) => (
+                <ScenarioFeedbackItem
+                  key={feedback.id}
+                  feedback={feedback}
+                />
+              ))}
+            </div>
+          )
         )}
       </div>
     </div>
   )
 }
 
-interface UserFeedbackItemProps {
+interface QuizFeedbackItemProps {
   feedback: QuizFeedback
   onRead: () => void
 }
 
-function UserFeedbackItem({ feedback, onRead }: UserFeedbackItemProps) {
+function QuizFeedbackItem({ feedback, onRead }: QuizFeedbackItemProps) {
   const [materialTitle, setMaterialTitle] = useState<string>('로딩 중...')
   const isUnread = feedback.status === 'sent' || feedback.status === 'pending'
 
@@ -233,6 +279,103 @@ function UserFeedbackItem({ feedback, onRead }: UserFeedbackItemProps) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface ScenarioFeedbackItemProps {
+  feedback: ScenarioFeedbackWithDetails
+}
+
+function ScenarioFeedbackItem({ feedback }: ScenarioFeedbackItemProps) {
+  const feedbackData = feedback.feedback_json
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  return (
+    <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+      <div className="flex justify-between items-start mb-3">
+        <div className="flex-1">
+          <h3 className="font-semibold text-gray-900">{feedback.session.scenario_title}</h3>
+          <p className="text-sm text-gray-600 mt-1">{feedback.session.scenario_description}</p>
+          <p className="text-xs text-gray-500 mt-2">
+            {new Date(feedback.created_at).toLocaleString('ko-KR')}
+          </p>
+        </div>
+        <div className="ml-4">
+          <div className="text-right">
+            <span className="text-2xl font-bold text-blue-600">{feedbackData.overallScore}</span>
+            <span className="text-sm text-gray-500">/100</span>
+          </div>
+          <p className="text-xs text-gray-500">종합 점수</p>
+        </div>
+      </div>
+
+      {/* 점수 그리드 */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <div className="bg-white rounded-lg p-3 text-center border border-gray-200">
+          <p className="text-xs text-gray-600 mb-1">공감</p>
+          <p className="text-lg font-semibold text-purple-600">{feedbackData.empathy}</p>
+        </div>
+        <div className="bg-white rounded-lg p-3 text-center border border-gray-200">
+          <p className="text-xs text-gray-600 mb-1">문제 해결</p>
+          <p className="text-lg font-semibold text-green-600">{feedbackData.problemSolving}</p>
+        </div>
+        <div className="bg-white rounded-lg p-3 text-center border border-gray-200">
+          <p className="text-xs text-gray-600 mb-1">전문성</p>
+          <p className="text-lg font-semibold text-blue-600">{feedbackData.professionalism}</p>
+        </div>
+        <div className="bg-white rounded-lg p-3 text-center border border-gray-200">
+          <p className="text-xs text-gray-600 mb-1">어조</p>
+          <p className="text-lg font-semibold text-orange-600">{feedbackData.tone}</p>
+        </div>
+      </div>
+
+      {/* 강점 */}
+      {feedbackData.strengths && feedbackData.strengths.length > 0 && (
+        <div className="mb-3">
+          <h4 className="text-sm font-medium text-green-700 mb-2">💪 강점</h4>
+          <div className="space-y-1">
+            {feedbackData.strengths.map((strength, idx) => (
+              <div key={idx} className="flex items-start">
+                <span className="text-green-500 mr-2">✓</span>
+                <span className="text-sm text-gray-700">{strength}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 개선점 */}
+      {feedbackData.improvements && feedbackData.improvements.length > 0 && (
+        <div className="mb-3">
+          <h4 className="text-sm font-medium text-orange-700 mb-2">🎯 개선점</h4>
+          <div className="space-y-1">
+            {feedbackData.improvements.map((improvement, idx) => (
+              <div key={idx} className="flex items-start">
+                <span className="text-orange-500 mr-2">→</span>
+                <span className="text-sm text-gray-700">{improvement}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 상세 피드백 (접기/펼치기) */}
+      {feedbackData.detailedFeedback && (
+        <div className="mt-3 pt-3 border-t border-gray-200">
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center"
+          >
+            {isExpanded ? '▼' : '▶'} 상세 피드백 {isExpanded ? '접기' : '보기'}
+          </button>
+          {isExpanded && (
+            <div className="mt-3 bg-white rounded-lg p-4 border border-blue-200">
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{feedbackData.detailedFeedback}</p>
+            </div>
+          )}
         </div>
       )}
     </div>
