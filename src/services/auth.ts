@@ -12,11 +12,20 @@ export interface AuthUser {
 /**
  * 이메일과 비밀번호로 회원가입
  */
-export async function signUp(email: string, password: string, name?: string) {
+export async function signUp(email: string, password: string, name: string) {
+  // 이메일 인증 후 리다이렉트 URL 설정
+  // 운영 환경: https://kamo-cs-trainer.vercel.app/
+  // 개발 환경: 현재 origin 사용
+  const redirectUrl = 
+    window.location.hostname === 'kamo-cs-trainer.vercel.app' 
+      ? 'https://kamo-cs-trainer.vercel.app/'
+      : window.location.origin + '/'
+
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
+      emailRedirectTo: redirectUrl,
       data: {
         name: name || email.split('@')[0],
       },

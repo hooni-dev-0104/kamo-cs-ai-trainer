@@ -56,3 +56,28 @@ export async function deleteQuizMaterial(id: string): Promise<void> {
   }
 }
 
+/**
+ * 재교육 기준 점수 업데이트 (Admin 전용)
+ */
+export async function updateRetrainingThreshold(
+  materialId: string,
+  threshold: number
+): Promise<QuizMaterial> {
+  if (threshold < 0 || threshold > 100) {
+    throw new Error('재교육 기준 점수는 0-100 사이여야 합니다.')
+  }
+
+  const { data, error } = await supabase
+    .from('quiz_materials')
+    .update({ retraining_threshold: threshold })
+    .eq('id', materialId)
+    .select()
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to update retraining threshold: ${error.message}`)
+  }
+
+  return data as QuizMaterial
+}
+

@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react'
 import { QuizSet, QuizResult as QuizResultType } from '../../types/quiz'
+import { getQuizMaterials } from '../../services/materials'
 
 interface QuizResultProps {
   quizSet: QuizSet
@@ -8,7 +10,32 @@ interface QuizResultProps {
 }
 
 export default function QuizResult({ quizSet, result, onRetry, onHome }: QuizResultProps) {
-  const isPass = result.score >= 70
+  const [retrainingThreshold, setRetrainingThreshold] = useState<number>(70)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const loadThreshold = async () => {
+      if (!quizSet.materialId) {
+        setLoading(false)
+        return
+      }
+      try {
+        const materials = await getQuizMaterials()
+        const material = materials.find(m => m.id === quizSet.materialId)
+        if (material?.retraining_threshold) {
+          setRetrainingThreshold(material.retraining_threshold)
+        }
+      } catch (err) {
+        console.error('Failed to load retraining threshold:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadThreshold()
+  }, [quizSet.materialId])
+
+  const isPass = result.score >= retrainingThreshold
+  const isRetrainingCandidate = result.score < retrainingThreshold
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -24,6 +51,16 @@ export default function QuizResult({ quizSet, result, onRetry, onHome }: QuizRes
           <p className="opacity-90">
             총 {result.totalQuestions}문제 중 {result.correctCount}문제 정답
           </p>
+          {isRetrainingCandidate && (
+            <div className="mt-4 p-4 bg-yellow-500 bg-opacity-20 rounded-lg border border-yellow-300">
+              <p className="text-sm font-semibold">
+                ⚠️ 재교육 대상입니다 (기준: {retrainingThreshold}점)
+              </p>
+              <p className="text-xs mt-1 opacity-90">
+                관리자로부터 피드백을 받을 예정입니다. 이메일을 확인해주세요.
+              </p>
+            </div>
+          )}
         </div>
         
         <div className="p-6 flex justify-center gap-4 bg-gray-50">

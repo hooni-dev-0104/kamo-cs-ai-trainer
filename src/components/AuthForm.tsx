@@ -60,10 +60,16 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
       return
     }
 
-    // 이름 검증 (회원가입 시)
-    if (!isLogin && name && name.trim().length > 100) {
-      setError('이름은 최대 100자까지 가능합니다.')
-      return
+    // 이름 검증 (회원가입 시 - 필수)
+    if (!isLogin) {
+      if (!name || !name.trim()) {
+        setError('이름을 입력해주세요.')
+        return
+      }
+      if (name.trim().length > 100) {
+        setError('이름은 최대 100자까지 가능합니다.')
+        return
+      }
     }
 
     setLoading(true)
@@ -73,7 +79,8 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
         await signIn(email.trim(), password)
         onAuthSuccess()
       } else {
-        const { session } = await signUp(email.trim(), password, name?.trim() || '')
+        // 이름이 필수이므로 이미 검증됨
+        const { session } = await signUp(email.trim(), password, name.trim())
         
         if (session) {
           onAuthSuccess()
@@ -161,13 +168,14 @@ export default function AuthForm({ onAuthSuccess }: AuthFormProps) {
           {!isLogin && (
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                이름 (선택사항)
+                이름 <span className="text-red-500">*</span>
               </label>
               <input
                 id="name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="홍길동"
               />

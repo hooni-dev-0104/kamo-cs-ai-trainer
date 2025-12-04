@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react'
 import { UserStats } from '../types/gamification'
 import { getCurrentUserStats } from '../services/userStats'
 import { User } from '@supabase/supabase-js'
+import { QuizFeedback } from '../types/quiz'
 import BadgeCollection from './BadgeCollection'
+import { getUserQuizFeedbacks, markFeedbackAsRead } from '../services/quizFeedback'
+import { supabase } from '../services/supabase'
 
 interface UserProfileProps {
   user?: User | null
@@ -12,6 +15,8 @@ interface UserProfileProps {
 export default function UserProfile({ user, userStats }: UserProfileProps) {
   const [stats, setStats] = useState<UserStats | null>(userStats || null)
   const [loading, setLoading] = useState(!userStats)
+  const [feedbacks, setFeedbacks] = useState<QuizFeedback[]>([])
+  const [loadingFeedbacks, setLoadingFeedbacks] = useState(false)
 
   useEffect(() => {
     // props로 전달받은 경우 로딩 불필요
@@ -35,6 +40,37 @@ export default function UserProfile({ user, userStats }: UserProfileProps) {
 
     loadStats()
   }, [userStats])
+
+  useEffect(() => {
+    if (!user) return
+
+    const loadFeedbacks = async () => {
+      setLoadingFeedbacks(true)
+      try {
+        const userFeedbacks = await getUserQuizFeedbacks(user.id)
+        setFeedbacks(userFeedbacks)
+      } catch (err) {
+        console.error('Failed to load feedbacks:', err)
+      } finally {
+        setLoadingFeedbacks(false)
+      }
+    }
+
+    loadFeedbacks()
+  }, [user])
+
+  const handleReadFeedback = async (feedbackId: string) => {
+    try {
+      await markFeedbackAsRead(feedbackId)
+      setFeedbacks(prev => prev.map(f => 
+        f.id === feedbackId 
+          ? { ...f, status: 'read' as const, read_at: new Date().toISOString() }
+          : f
+      ))
+    } catch (err) {
+      console.error('Failed to mark feedback as read:', err)
+    }
+  }
 
   if (loading) {
     return (
@@ -118,6 +154,87 @@ export default function UserProfile({ user, userStats }: UserProfileProps) {
 
       {/* 배지 컬렉션 */}
       <BadgeCollection />
+
+      {/* 피드백 섹션 */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h2 className="text-2xl font-bold mb-4">받은 피드백</h2>
+        
+        {loadingFeedbacks ? (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+            <p className="text-gray-600 text-sm">피드백을 불러오는 중...</p>
+          </div>
+        ) : feedbacks.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">받은 피드백이 없습니다.</p>
+        ) : (
+          <div className="space-y-4">
+            {feedbacks.map((feedback) => (
+              <UserFeedbackItem
+                key={feedback.id}
+                feedback={feedback}
+                onRead={() => handleReadFeedback(feedback.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+interface UserFeedbackItemProps {
+  feedback: QuizFeedback
+  onRead: () => void
+}
+
+function UserFeedbackItem({ feedback, onRead }: UserFeedbackItemProps) {
+  const [materialTitle, setMaterialTitle] = useState<string>('로딩 중...')
+  const isUnread = feedback.status === 'sent' || feedback.status === 'pending'
+
+  useEffect(() => {
+    supabase
+      .from('quiz_materials')
+      .select('title')
+      .eq('id', feedback.material_id)
+      .single()
+      .then(({ data }) => {
+        setMaterialTitle(data?.title || '알 수 없음')
+      })
+  }, [feedback.material_id])
+
+  return (
+    <div className={`border rounded-lg p-4 ${isUnread ? 'border-blue-300 bg-blue-50' : 'border-gray-200 bg-gray-50'}`}>
+      <div className="flex justify-between items-start mb-2">
+        <div>
+          <h3 className="font-semibold text-gray-900">{materialTitle}</h3>
+          <p className="text-xs text-gray-500 mt-1">
+            {new Date(feedback.created_at).toLocaleString('ko-KR')}
+          </p>
+        </div>
+        {isUnread && (
+          <button
+            onClick={onRead}
+            className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            읽음 처리
+          </button>
+        )}
+      </div>
+      <div className="mt-3">
+        <p className="text-gray-800 whitespace-pre-wrap">{feedback.feedback_text}</p>
+      </div>
+      {feedback.weak_areas && feedback.weak_areas.details && feedback.weak_areas.details.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-gray-200">
+          <h4 className="text-sm font-medium text-gray-700 mb-2">개선이 필요한 영역:</h4>
+          <div className="flex flex-wrap gap-2">
+            {feedback.weak_areas.details.map((area, idx) => (
+              <div key={idx} className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">
+                {area.area}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

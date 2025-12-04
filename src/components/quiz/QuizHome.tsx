@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { extractTextFromZip, generateQuizFromMaterials } from '../../services/quiz'
 import { getQuizMaterials, createQuizMaterial, deleteQuizMaterial } from '../../services/materials'
-import { QuizSet, QuizMaterial } from '../../types/quiz'
+import { QuizSet, QuizMaterial, QuizDifficulty } from '../../types/quiz'
 import { getCurrentUser } from '../../services/auth'
 import { getCurrentUserProfile } from '../../services/userManagement'
 
 interface QuizHomeProps {
-  onQuizGenerated: (quizSet: QuizSet) => void
+  onQuizGenerated: (quizSet: QuizSet, materialId: string, difficulty: QuizDifficulty) => void
 }
 
 export default function QuizHome({ onQuizGenerated }: QuizHomeProps) {
@@ -17,6 +17,8 @@ export default function QuizHome({ onQuizGenerated }: QuizHomeProps) {
   const [generating, setGenerating] = useState(false) // 퀴즈 생성 중 상태
   const [error, setError] = useState<string | null>(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [selectedMaterial, setSelectedMaterial] = useState<QuizMaterial | null>(null)
+  const [selectedDifficulty, setSelectedDifficulty] = useState<QuizDifficulty>('medium')
 
   useEffect(() => {
     loadData()
@@ -102,12 +104,21 @@ export default function QuizHome({ onQuizGenerated }: QuizHomeProps) {
     }
   }
 
-  const handleStartQuiz = async (material: QuizMaterial) => {
+  const handleMaterialClick = (material: QuizMaterial) => {
+    setSelectedMaterial(material)
+  }
+
+  const handleStartQuiz = async () => {
+    if (!selectedMaterial) return
+
     setGenerating(true)
     setError(null)
     try {
-      const quizSet = await generateQuizFromMaterials(material.content)
-      onQuizGenerated(quizSet)
+      const quizSet = await generateQuizFromMaterials(selectedMaterial.content, selectedDifficulty)
+      quizSet.materialId = selectedMaterial.id
+      quizSet.difficulty = selectedDifficulty
+      onQuizGenerated(quizSet, selectedMaterial.id, selectedDifficulty)
+      setSelectedMaterial(null) // 초기화
     } catch (err) {
       console.error(err)
       setError('퀴즈 생성 중 오류가 발생했습니다.')
@@ -187,7 +198,7 @@ export default function QuizHome({ onQuizGenerated }: QuizHomeProps) {
           materials.map((material) => (
             <div 
               key={material.id}
-              onClick={() => handleStartQuiz(material)}
+              onClick={() => handleMaterialClick(material)}
               className="bg-white p-6 rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer border border-gray-100 hover:border-purple-300 group relative"
             >
               <div className="flex items-start justify-between">
@@ -224,6 +235,72 @@ export default function QuizHome({ onQuizGenerated }: QuizHomeProps) {
           ))
         )}
       </div>
+
+      {/* 난이도 선택 모달 */}
+      {selectedMaterial && (
+        <div className="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full mx-4">
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">시험 난이도 선택</h3>
+            <p className="text-gray-600 mb-6">
+              <span className="font-semibold">{selectedMaterial.title}</span> 시험의 난이도를 선택해주세요.
+            </p>
+            
+            <div className="space-y-3 mb-6">
+              <button
+                onClick={() => setSelectedDifficulty('easy')}
+                className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                  selectedDifficulty === 'easy'
+                    ? 'border-green-500 bg-green-50'
+                    : 'border-gray-200 hover:border-green-300'
+                }`}
+              >
+                <div className="font-semibold text-gray-900 mb-1">쉬움 (Easy)</div>
+                <div className="text-sm text-gray-600">기본적인 내용을 묻는 문제입니다.</div>
+              </button>
+              
+              <button
+                onClick={() => setSelectedDifficulty('medium')}
+                className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                  selectedDifficulty === 'medium'
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:border-blue-300'
+                }`}
+              >
+                <div className="font-semibold text-gray-900 mb-1">보통 (Medium)</div>
+                <div className="text-sm text-gray-600">학습 자료를 꼼꼼히 읽었다면 풀 수 있는 수준입니다.</div>
+              </button>
+              
+              <button
+                onClick={() => setSelectedDifficulty('hard')}
+                className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+                  selectedDifficulty === 'hard'
+                    ? 'border-red-500 bg-red-50'
+                    : 'border-gray-200 hover:border-red-300'
+                }`}
+              >
+                <div className="font-semibold text-gray-900 mb-1">어려움 (Hard)</div>
+                <div className="text-sm text-gray-600">깊이 이해하고 응용할 수 있어야 풀 수 있는 문제입니다.</div>
+              </button>
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => setSelectedMaterial(null)}
+                className="flex-1 px-6 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleStartQuiz}
+                disabled={generating}
+                className="flex-1 px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {generating ? '생성 중...' : '시험 시작'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 관리자 전용 업로드 영역 */}
       {userIsAdmin && (

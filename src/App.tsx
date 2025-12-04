@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Scenario, AppStep, Feedback, ConversationTurn } from './types'
-import { QuizSet, QuizResult as QuizResultType } from './types/quiz'
+import { QuizSet, QuizResult as QuizResultType, QuizDifficulty } from './types/quiz'
 import { Badge, UserStats } from './types/gamification'
 import ScenarioSelector from './components/ScenarioSelector'
 import VoicePlayer from './components/VoicePlayer'
@@ -22,6 +22,10 @@ import { getCurrentUser, onAuthStateChange, signOut } from './services/auth'
 import { addScore as addScoreAndCompleteSession, getCurrentUserStats } from './services/userStats'
 import { checkAndAwardBadges, getAllBadges } from './services/badges'
 import { getCurrentUserProfile } from './services/userManagement'
+import { createQuizSession, saveQuizResult } from './services/quizSessions'
+import { generateAIFeedbackRecommendation, createQuizFeedback } from './services/quizFeedback'
+import { getQuizMaterials } from './services/materials'
+import { supabase } from './services/supabase'
 import { User } from '@supabase/supabase-js'
 
 function App() {
@@ -43,6 +47,7 @@ function App() {
   // 퀴즈 모드 상태
   const [quizSet, setQuizSet] = useState<QuizSet | null>(null)
   const [quizResult, setQuizResult] = useState<QuizResultType | null>(null)
+  const [quizSessionId, setQuizSessionId] = useState<string | null>(null)
 
   // 공통 상태
   const [loading, setLoading] = useState(false)
@@ -160,6 +165,7 @@ function App() {
     setCurrentTurn(0)
     setQuizSet(null)
     setQuizResult(null)
+    setQuizSessionId(null)
     setEarnedBadges([])
     stepHistoryRef.current = ['mode-selection']
     window.history.replaceState({ step: 'mode-selection' }, '', '#')
@@ -367,8 +373,21 @@ function App() {
   }
 
   // 퀴즈 생성 핸들러
-  const handleQuizGenerated = (generatedQuizSet: QuizSet) => {
+  const handleQuizGenerated = async (generatedQuizSet: QuizSet, materialId: string, difficulty: QuizDifficulty) => {
     setQuizSet(generatedQuizSet)
+    
+    // 퀴즈 세션 생성 (DB 저장)
+    if (user) {
+      try {
+        const session = await createQuizSession(materialId, difficulty)
+        setQuizSessionId(session.id)
+      } catch (err) {
+        console.error('Failed to create quiz session:', err)
+        // 세션 생성 실패해도 퀴즈는 진행 가능
+        setQuizSessionId(null)
+      }
+    }
+    
     setCurrentStep('quiz-solver')
   }
 
@@ -377,15 +396,96 @@ function App() {
     setQuizResult(result)
     setCurrentStep('quiz-result')
 
-    // 점수 반영
-    if (user) {
+    // 점수 반영 및 DB 저장
+    if (user && quizSet?.materialId) {
       try {
+        let sessionId = quizSessionId
+
+        // 세션이 없으면 지금 생성
+        if (!sessionId) {
+          console.log('Quiz session not found, creating new session...', {
+            materialId: quizSet.materialId,
+            difficulty: quizSet.difficulty || 'medium'
+          })
+          try {
+            const session = await createQuizSession(
+              quizSet.materialId,
+              quizSet.difficulty || 'medium'
+            )
+            sessionId = session.id
+            setQuizSessionId(sessionId)
+            console.log('Quiz session created:', sessionId)
+          } catch (sessionErr) {
+            console.error('Failed to create quiz session:', sessionErr)
+            // 세션 생성 실패해도 통계는 업데이트
+          }
+        }
+
+        // 세션이 있으면 결과 저장
+        let quizResultId: string | null = null
+        if (sessionId) {
+          try {
+            const savedResult = await saveQuizResult(
+              sessionId,
+              result.totalQuestions,
+              result.correctCount,
+              result.score,
+              result.wrongQuestions,
+              result.userAnswers
+            )
+            quizResultId = savedResult.id
+            console.log('Quiz result saved successfully:', quizResultId)
+
+            // 재교육 대상 여부 판단 및 피드백 생성
+            try {
+              const materials = await getQuizMaterials()
+              const material = materials.find(m => m.id === quizSet.materialId)
+              const threshold = material?.retraining_threshold || 70
+
+              if (result.score < threshold) {
+                // 재교육 대상: AI 피드백 추천 생성
+                console.log('User is retraining candidate, generating AI feedback recommendation...')
+                const aiFeedback = await generateAIFeedbackRecommendation(
+                  quizSet.title,
+                  result.score,
+                  result.totalQuestions,
+                  result.correctCount,
+                  result.wrongQuestions,
+                  result.userAnswers,
+                  quizSet.questions
+                )
+
+                // 피드백 생성 (pending 상태로 저장, 관리자가 검토 후 전송)
+                await createQuizFeedback(
+                  quizResultId,
+                  user.id,
+                  quizSet.materialId,
+                  aiFeedback.recommendedFeedback, // 기본값으로 AI 추천 피드백 사용
+                  aiFeedback.recommendedFeedback,
+                  {
+                    areas: aiFeedback.weakAreas.map(wa => wa.area),
+                    details: aiFeedback.weakAreas,
+                  }
+                )
+                console.log('Feedback created for retraining candidate')
+              }
+            } catch (feedbackErr) {
+              console.error('Failed to create feedback:', feedbackErr)
+              // 피드백 생성 실패해도 계속 진행
+            }
+          } catch (resultErr) {
+            console.error('Failed to save quiz result:', resultErr)
+            // 결과 저장 실패해도 통계는 업데이트
+          }
+        }
+
+        // 통계 업데이트 (세션/결과 저장 실패해도 진행)
         const updatedStats = await addScoreAndCompleteSession(user.id, result.score, 'quiz-session')
         setUserStats(updatedStats)
         
         const badgeIds = await checkAndAwardBadges(
           user.id, 
-          'quiz-session', 
+          sessionId || 'quiz-session', 
           result.score,
           {
             total_score: updatedStats.total_score,
@@ -400,7 +500,13 @@ function App() {
         }
       } catch (err) {
         console.error('Failed to update stats:', err)
+        // 에러가 발생해도 사용자에게는 결과를 보여줌
       }
+    } else {
+      console.warn('Cannot save quiz result: missing user or materialId', {
+        user: !!user,
+        materialId: quizSet?.materialId
+      })
     }
   }
 
@@ -665,7 +771,7 @@ function App() {
                 ← 모드 선택으로 돌아가기
               </button>
             </div>
-            <AdminDashboard />
+            <AdminDashboard onQuizGenerated={handleQuizGenerated} />
           </div>
         )}
 

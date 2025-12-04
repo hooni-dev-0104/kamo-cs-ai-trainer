@@ -538,6 +538,78 @@ JSON만 응답하고 다른 텍스트는 포함하지 마세요.`
 }
 
 /**
+ * Google Gemini API를 사용하여 피드백 추천 생성
+ */
+export async function generateFeedbackRecommendation(
+  prompt: string
+): Promise<{ recommendedFeedback: string; weakAreas: Array<{ area: string; description: string; questions: number[] }> }> {
+  return withRetry(async () => {
+    let response: Response
+    try {
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GOOGLE_CLOUD_API_KEY}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: prompt,
+                  },
+                ],
+              },
+            ],
+            generationConfig: {
+              temperature: 0.7,
+              topK: 40,
+              topP: 0.95,
+              maxOutputTokens: 1024,
+              response_mime_type: 'application/json',
+            },
+          }),
+        }
+      )
+    } catch (error) {
+      throw handleApiError(error, '피드백 추천 생성 요청 실패')
+    }
+
+    if (!response.ok) {
+      let error: any
+      try {
+        error = await response.json()
+      } catch {
+        throw new Error(`서버 오류가 발생했습니다. (상태 코드: ${response.status})`)
+      }
+      throw handleApiError(error, '피드백 추천 생성 실패')
+    }
+
+    const data = await response.json()
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text
+
+    if (!content) {
+      throw new Error('AI로부터 응답을 받을 수 없습니다. 다시 시도해주세요.')
+    }
+
+    try {
+      const parsed = JSON.parse(content)
+      return {
+        recommendedFeedback: parsed.recommendedFeedback || '',
+        weakAreas: parsed.weakAreas || [],
+      }
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new Error('피드백 데이터를 파싱할 수 없습니다. 다시 시도해주세요.')
+      }
+      throw error
+    }
+  }, 3, 1000)
+}
+
+/**
  * Blob을 Base64로 변환하는 헬퍼 함수
  */
 function blobToBase64(blob: Blob): Promise<string> {

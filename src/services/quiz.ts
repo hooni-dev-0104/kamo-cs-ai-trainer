@@ -1,5 +1,5 @@
 import JSZip from 'jszip'
-import { QuizSet } from '../types/quiz'
+import { QuizSet, QuizDifficulty } from '../types/quiz'
 
 const GOOGLE_CLOUD_API_KEY = import.meta.env.VITE_GOOGLE_CLOUD_API_KEY
 
@@ -111,9 +111,19 @@ export async function extractTextFromZip(file: File): Promise<string> {
 /**
  * Gemini API를 사용하여 퀴즈 생성
  */
-export async function generateQuizFromMaterials(materialsText: string): Promise<QuizSet> {
+export async function generateQuizFromMaterials(
+  materialsText: string,
+  difficulty: QuizDifficulty = 'medium'
+): Promise<QuizSet> {
   if (!GOOGLE_CLOUD_API_KEY) {
     throw new Error('Google Cloud API Key가 설정되지 않았습니다.')
+  }
+
+  // 난이도별 설명
+  const difficultyDescription = {
+    easy: '기본적인 내용을 묻는 쉬운 문제로 출제해주세요. 학습 자료를 한 번 읽으면 답할 수 있는 수준입니다.',
+    medium: '학습 자료를 꼼꼼히 읽고 이해했다면 풀 수 있는 보통 난이도의 문제로 출제해주세요.',
+    hard: '학습 자료를 깊이 이해하고 응용할 수 있어야 풀 수 있는 어려운 문제로 출제해주세요. 세부 사항과 맥락을 파악해야 합니다.'
   }
 
   const prompt = `
@@ -126,7 +136,7 @@ ${materialsText.substring(0, 100000)} // 너무 길 경우를 대비해 일부 �
 1. 총 10문제를 출제해주세요.
 2. 1번~5번: 4지선다 객관식 (multiple-choice)
 3. 6번~10번: O/X 퀴즈 (true-false)
-4. 난이도는 신입사원이 학습 자료를 꼼꼼히 읽었다면 풀 수 있는 수준으로 설정해주세요.
+4. 난이도: ${difficultyDescription[difficulty]}
 5. 각 문제에는 명확한 정답과 친절한 해설을 포함해주세요.
 6. 반드시 아래 JSON 형식으로만 응답해주세요. (Markdown 코드 블록 없이 순수 JSON)
 
