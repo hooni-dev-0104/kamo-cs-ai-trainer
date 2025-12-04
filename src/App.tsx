@@ -518,9 +518,11 @@ function App() {
         const updatedStats = await addScoreAndCompleteSession(user.id, result.score, 'quiz-session')
         setUserStats(updatedStats)
         
+        console.log('🎯 퀴즈 배지 체크 - sessionId:', sessionId)
+        
         const badgeIds = await checkAndAwardBadges(
           user.id, 
-          sessionId || 'quiz-session', 
+          undefined, // 퀴즈는 sessions 테이블이 아닌 quiz_sessions를 사용하므로 undefined 전달
           result.score,
           {
             total_score: updatedStats.total_score,

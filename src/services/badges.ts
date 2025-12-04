@@ -93,10 +93,22 @@ export async function checkAndAwardBadges(
   feedback: Partial<Feedback['feedback_json']> | number, // 피드백 객체 또는 점수(number)
   userStats: { total_score: number; completed_sessions: number }
 ): Promise<string[]> {
+  console.log('🏆 배지 체크 시작:', {
+    userId: userId.substring(0, 8) + '...',
+    sessionId: sessionId?.substring(0, 8) + '...',
+    userStats
+  })
+
   const earnedBadgeIds: string[] = []
   const allBadges = await getAllBadges()
   const userBadges = await getUserBadges(userId)
   const userBadgeIds = new Set(userBadges.map(b => b.badge_id))
+
+  console.log('📊 배지 현황:', {
+    totalBadges: allBadges.length,
+    earnedBadges: userBadges.length,
+    earnedBadgeIds: Array.from(userBadgeIds)
+  })
 
   // 점수 추출 (feedback이 숫자인 경우 그 자체로 점수)
   const currentScore = typeof feedback === 'number' ? feedback : (feedback.overallScore || 0)
@@ -111,17 +123,31 @@ export async function checkAndAwardBadges(
 
     switch (badge.condition_type) {
       case 'first_session':
-        shouldAward = userStats.completed_sessions === 1
+        shouldAward = userStats.completed_sessions >= 1
+        console.log(`🔍 첫 세션 배지 체크 (${badge.name}):`, {
+          completed_sessions: userStats.completed_sessions,
+          shouldAward
+        })
         break
 
       case 'perfect_score':
         const perfectScore = badge.condition_value.score || 100
         shouldAward = currentScore >= perfectScore
+        console.log(`🔍 완벽한 점수 배지 체크 (${badge.name}):`, {
+          currentScore,
+          requiredScore: perfectScore,
+          shouldAward
+        })
         break
 
       case 'session_count':
         const requiredCount = badge.condition_value.count || 10
         shouldAward = userStats.completed_sessions >= requiredCount
+        console.log(`🔍 세션 횟수 배지 체크 (${badge.name}):`, {
+          completed_sessions: userStats.completed_sessions,
+          requiredCount,
+          shouldAward
+        })
         break
 
       case 'all_scenarios':
@@ -153,14 +179,17 @@ export async function checkAndAwardBadges(
 
     if (shouldAward) {
       try {
+        console.log(`✅ 배지 획득 시도: ${badge.name} (${badge.id})`)
         await earnBadge(userId, badge.id, sessionId)
         earnedBadgeIds.push(badge.id)
+        console.log(`🎉 배지 획득 성공: ${badge.name}`)
       } catch (err) {
-        console.error(`Failed to award badge ${badge.id}:`, err)
+        console.error(`❌ 배지 획득 실패 ${badge.name}:`, err)
       }
     }
   }
 
+  console.log(`🏆 배지 체크 완료. 획득한 배지 수: ${earnedBadgeIds.length}`)
   return earnedBadgeIds
 }
 
