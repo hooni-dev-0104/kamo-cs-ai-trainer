@@ -32,12 +32,14 @@ export default function QuizHome({ onQuizGenerated }: QuizHomeProps) {
     true_false_count: number
     required_topics: string
     quiz_mode: 'ai' | 'manual' | 'both'
+    ai_prompt: string
   }>({
     total_questions: 10,
     multiple_choice_count: 5,
     true_false_count: 5,
     required_topics: '',
-    quiz_mode: 'ai'
+    quiz_mode: 'ai',
+    ai_prompt: ''
   })
 
   useEffect(() => {
@@ -208,7 +210,8 @@ export default function QuizHome({ onQuizGenerated }: QuizHomeProps) {
       multiple_choice_count: material.multiple_choice_count || 5,
       true_false_count: material.true_false_count || 5,
       required_topics: material.required_topics?.join(', ') || '',
-      quiz_mode: material.quiz_mode || 'ai'
+      quiz_mode: material.quiz_mode || 'ai',
+      ai_prompt: material.ai_prompt || ''
     })
   }
 
@@ -226,7 +229,8 @@ export default function QuizHome({ onQuizGenerated }: QuizHomeProps) {
         multiple_choice_count: quizSettings.multiple_choice_count,
         true_false_count: quizSettings.true_false_count,
         required_topics: topics,
-        quiz_mode: quizSettings.quiz_mode
+        quiz_mode: quizSettings.quiz_mode,
+        ai_prompt: quizSettings.ai_prompt.trim() || null
       })
 
       const updatedMaterials = await getQuizMaterials()
@@ -758,6 +762,22 @@ export default function QuizHome({ onQuizGenerated }: QuizHomeProps) {
                     />
                     <p className="text-xs text-gray-500 mt-1">
                       쉼표(,)로 구분하여 입력하세요. AI가 해당 영역의 문제를 우선적으로 출제합니다.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      AI 출제 커스텀 프롬프트 (선택사항)
+                    </label>
+                    <textarea
+                      value={quizSettings.ai_prompt}
+                      onChange={(e) => setQuizSettings(prev => ({ ...prev, ai_prompt: e.target.value }))}
+                      placeholder="예: 실무 상황을 반영한 문제를 출제해주세요. 개념 설명보다는 적용 능력을 평가하는 문제를 중심으로 구성해주세요."
+                      rows={4}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      AI가 문제를 출제할 때 참고할 추가 지침을 입력하세요. 출제 방향, 난이도, 스타일 등을 지정할 수 있습니다.
                     </p>
                   </div>
                 </>

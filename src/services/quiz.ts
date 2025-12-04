@@ -119,6 +119,7 @@ export async function generateQuizFromMaterials(
     multiple_choice_count?: number
     true_false_count?: number
     required_topics?: string[]
+    ai_prompt?: string
   }
 ): Promise<QuizSet> {
   if (!GOOGLE_CLOUD_API_KEY) {
@@ -141,6 +142,10 @@ export async function generateQuizFromMaterials(
     ? `\n7. 다음 영역/키워드를 반드시 포함해주세요: ${requiredTopics.join(', ')}`
     : ''
 
+  const customPromptText = settings?.ai_prompt 
+    ? `\n8. 추가 출제 지침:\n${settings.ai_prompt}`
+    : ''
+
   const prompt = `
 당신은 신입사원 교육 평가 전문가입니다. 제공된 학습 자료를 바탕으로 학습 성취도를 평가할 수 있는 시험 문제를 출제해주세요.
 
@@ -153,7 +158,7 @@ ${materialsText.substring(0, 100000)} // 너무 길 경우를 대비해 일부 �
 3. ${mcCount + 1}번~${totalQuestions}번: O/X 퀴즈 (true-false)
 4. 난이도: ${difficultyDescription[difficulty]}
 5. 각 문제에는 명확한 정답과 친절한 해설을 포함해주세요.
-6. 반드시 아래 JSON 형식으로만 응답해주세요. (Markdown 코드 블록 없이 순수 JSON)${requiredTopicsText}
+6. 반드시 아래 JSON 형식으로만 응답해주세요. (Markdown 코드 블록 없이 순수 JSON)${requiredTopicsText}${customPromptText}
 
 [출력 JSON 형식]
 {

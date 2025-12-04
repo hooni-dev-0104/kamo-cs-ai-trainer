@@ -40,6 +40,7 @@ export interface QuizMaterial {
   true_false_count?: number // OX 문항 수 (기본값 5)
   required_topics?: string[] // 필수 포함 영역/키워드
   quiz_mode?: 'ai' | 'manual' | 'both' // 출제 모드
+  ai_prompt?: string // AI 출제 시 참고할 커스텀 프롬프트
 }
 
 // DB에 저장되는 퀴즈 세션 정보

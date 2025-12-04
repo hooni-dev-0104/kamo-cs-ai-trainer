@@ -117,6 +117,7 @@ export async function updateQuizSettings(
     true_false_count?: number
     required_topics?: string[]
     quiz_mode?: 'ai' | 'manual' | 'both'
+    ai_prompt?: string | null
   }
 ): Promise<QuizMaterial> {
   // 유효성 검사

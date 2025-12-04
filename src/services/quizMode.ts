@@ -20,7 +20,8 @@ export async function generateQuizByMode(
       total_questions: material.total_questions || 10,
       multiple_choice_count: material.multiple_choice_count || 5,
       true_false_count: material.true_false_count || 5,
-      required_topics: material.required_topics || []
+      required_topics: material.required_topics || [],
+      ai_prompt: material.ai_prompt
     }
     return await generateQuizFromMaterials(material.content, difficulty, settings)
   }
@@ -54,7 +55,8 @@ export async function generateQuizByMode(
       total_questions: aiQuestionCount,
       multiple_choice_count: Math.min(material.multiple_choice_count || 5, aiQuestionCount),
       true_false_count: Math.min(material.true_false_count || 5, aiQuestionCount),
-      required_topics: material.required_topics || []
+      required_topics: material.required_topics || [],
+      ai_prompt: material.ai_prompt
     })
 
     // 직접 출제 문제와 AI 문제를 합침
