@@ -4,6 +4,8 @@ import { getCurrentUser } from '../../services/auth'
 
 export default function AdminUserList() {
   const [users, setUsers] = useState<UserProfile[]>([])
+  const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([])
+  const [searchEmail, setSearchEmail] = useState('')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -21,12 +23,25 @@ export default function AdminUserList() {
     try {
       const data = await getAllUsers()
       setUsers(data)
+      setFilteredUsers(data)
     } catch (err) {
       setError('사용자 목록을 불러오는데 실패했습니다.')
     } finally {
       setLoading(false)
     }
   }
+
+  // 검색 필터링
+  useEffect(() => {
+    if (!searchEmail.trim()) {
+      setFilteredUsers(users)
+    } else {
+      const filtered = users.filter(user => 
+        user.email.toLowerCase().includes(searchEmail.toLowerCase())
+      )
+      setFilteredUsers(filtered)
+    }
+  }, [searchEmail, users])
 
   const handleRoleChange = async (userId: string, currentRole: 'admin' | 'user') => {
     const newRole = currentRole === 'admin' ? 'user' : 'admin'
@@ -68,8 +83,32 @@ export default function AdminUserList() {
   if (error) return <div className="p-4 text-center text-red-500">{error}</div>
 
   return (
-    <div className="bg-white rounded-lg shadow overflow-hidden">
-      <table className="min-w-full divide-y divide-gray-200">
+    <div className="space-y-4">
+      {/* 검색 바 */}
+      <div className="bg-white rounded-lg shadow p-4">
+        <div className="flex items-center gap-4">
+          <div className="flex-1">
+            <label htmlFor="email-search" className="block text-sm font-medium text-gray-700 mb-2">
+              이메일 검색
+            </label>
+            <input
+              id="email-search"
+              type="text"
+              value={searchEmail}
+              onChange={(e) => setSearchEmail(e.target.value)}
+              placeholder="이메일을 입력하세요"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <div className="text-sm text-gray-600 mt-6">
+            총 <span className="font-bold text-gray-900">{filteredUsers.length}</span>명
+          </div>
+        </div>
+      </div>
+
+      {/* 사용자 테이블 */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">이메일</th>
@@ -80,8 +119,15 @@ export default function AdminUserList() {
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {users.map((user) => {
-            const isEditingThisUser = editingDepartment?.userId === user.id
+          {filteredUsers.length === 0 ? (
+            <tr>
+              <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                검색 결과가 없습니다.
+              </td>
+            </tr>
+          ) : (
+            filteredUsers.map((user) => {
+              const isEditingThisUser = editingDepartment?.userId === user.id
             
             return (
               <tr key={user.id} className={user.id === currentUserId ? 'bg-blue-50' : ''}>
@@ -156,9 +202,11 @@ export default function AdminUserList() {
                 </td>
               </tr>
             )
-          })}
+          })
+          )}
         </tbody>
       </table>
+      </div>
     </div>
   )
 }
