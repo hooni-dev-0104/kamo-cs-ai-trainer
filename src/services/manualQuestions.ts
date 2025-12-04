@@ -95,7 +95,7 @@ export async function deleteManualQuestion(questionId: string): Promise<void> {
  * 직접 출제 문제 순서 변경
  */
 export async function reorderManualQuestions(
-  materialId: string,
+  _materialId: string,
   questionIds: string[]
 ): Promise<void> {
   const updates = questionIds.map((id, index) => ({

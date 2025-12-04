@@ -165,7 +165,7 @@ ${wrongQuestionsText || '틀린 문제 없음'}
     console.log('- overallRecommendation 길이:', response.overallRecommendation?.length || 0, '자')
     
     // 각 틀린 문제 분석 길이 확인
-    response.wrongQuestionAnalysis?.forEach((analysis, idx) => {
+    response.wrongQuestionAnalysis?.forEach((analysis) => {
       console.log(`  문제 ${analysis.questionId}:`, {
         whyWrong: analysis.whyWrong?.length || 0,
         keyConceptExplanation: analysis.keyConceptExplanation?.length || 0,

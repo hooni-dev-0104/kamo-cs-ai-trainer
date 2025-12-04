@@ -128,7 +128,6 @@ export async function generateQuizFromMaterials(
   // 설정값 적용
   const totalQuestions = settings?.total_questions || 10
   const mcCount = settings?.multiple_choice_count || 5
-  const tfCount = settings?.true_false_count || 5
   const requiredTopics = settings?.required_topics || []
 
   // 난이도별 설명
