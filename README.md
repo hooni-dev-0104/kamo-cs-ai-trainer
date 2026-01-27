@@ -27,22 +27,228 @@ AI 기반 고객서비스 상담원 교육 플랫폼 - 실전 음성 시뮬레�
 
 ---
 
-## 🤖 AI 기술 활용
+## 🤖 AI 기술 분석
 
-### Google Gemini API - 대화형 AI 고객
-Gemini 2.0 Flash 모델이 상담원 응답에 따라 동적으로 고객 반응을 생성한다. temperature 0.7로 자연스러운 대화 변화를 유도하며, 공감적 응대 시 고객이 진정되고 불친절 시 더 화를 내는 등 맥락 기반 응답을 제공한다.
+### 사용된 AI 기술 개요
 
-### Google Gemini API - 자동 문제 출제
-PPTX는 DOMParser로 XML 파싱하여 슬라이드별 텍스트를 추출하고, 관리자 설정(문항 수, 비율, 키워드, 프롬프트)을 JSON으로 전달한다. API는 문제, 보기, 정답, 해설을 포함한 JSON을 반환하며 수 분 내 10-50문항을 생성한다.
+| 기술 | 모델/서비스 | 주요 용도 |
+|------|-------------|----------|
+| **LLM** | Google Gemini 2.0 Flash | 대화 생성, 퀴즈 출제, 피드백 분석 |
+| **STT** | Google Cloud Speech-to-Text | 음성 → 텍스트 변환 |
+| **TTS** | Google Cloud Text-to-Speech | 텍스트 → 음성 변환 |
 
-### Google Gemini API - 응대 평가
-대화 전체를 분석하여 4개 항목을 100점 만점으로 평가하고 구체적 피드백을 제공한다. 퀴즈 결과는 틀린 문제별 오답 이유, 핵심 개념, 학습 팁과 우선순위별 취약점 분석을 생성한다.
+---
 
-### Google Cloud Speech-to-Text API
-MediaRecorder로 녹음한 WebM 오디오를 base64 인코딩하여 전달한다. ko-KR languageCode, LINEAR16 encoding, 16000 sampleRateHertz로 설정하며, 변환된 텍스트는 Gemini API로 전달된다.
+### 1. 음성 인식 (Speech-to-Text)
 
-### Google Cloud Text-to-Speech API
-SSML prosody 태그로 감정을 표현한다(화남: rate=fast/pitch=+3st, 슬픔: rate=slow/pitch=-3st). ko-KR-Standard-A 음성, MP3 인코딩을 사용하고 base64 오디오를 Blob으로 변환하여 재생한다.
+**파일**: `src/services/google-cloud.ts`
+
+```typescript
+config: {
+  encoding: 'WEBM_OPUS',
+  sampleRateHertz: 48000,
+  languageCode: 'ko-KR',
+  audioChannelCount: 1,
+}
+```
+
+**정확도 향상 튜닝**:
+- 한국어 전용 설정 (`ko-KR`)
+- 48kHz 샘플레이트로 고품질 음성 입력
+- WebM OPUS 코덱으로 브라우저 호환성 확보
+- 재시도 로직 (3회, 지수 백오프)
+
+---
+
+### 2. 음성 합성 (Text-to-Speech)
+
+**파일**: `src/services/google-cloud.ts`
+
+**감정별 음성 파라미터**:
+
+| 감정 | Pitch | Speaking Rate | 설명 |
+|------|-------|---------------|------|
+| 화남 (angry) | -1.0 | 1.1 | 빠르고 약간 높은 톤 |
+| 답답함 (frustrated) | -1.5 | 1.05 | 약간 빠른 속도 |
+| 슬픔 (sad) | -4.0 | 0.95 | 낮고 느린 톤 |
+| 보통 (normal) | -2.5 | 1.0 | 자연스러운 기본 톤 |
+
+**품질 설정**:
+- 음성: `ko-KR-Neural2-A` (고품질 뉴럴 음성)
+- 인코딩: `LINEAR16` (WAV, 고품질)
+- 샘플레이트: 24000Hz
+
+---
+
+### 3. AI 고객 대화 생성 (Gemini)
+
+**파일**: `src/services/google-cloud.ts`
+
+#### 3-1. 초기 고객 메시지 생성
+
+```typescript
+generationConfig: {
+  temperature: 0.9,  // 다양한 표현을 위해 높게 설정
+  topK: 40,
+  topP: 0.95,
+  maxOutputTokens: 150,
+}
+```
+
+**프롬프트 설계**:
+```
+${customerPrompt}
+시나리오 컨텍스트: ${scenarioContext}
+...
+- **중요: 여러 가지 상황을 나열하지 마세요. 지금 당장 겪고 있는 단 하나의 구체적인 불만 상황을 연기하세요.**
+- 상담원에게 직접 말을 건네는 대화체로 작성하세요. (독백이나 상황 설명 금지)
+- 1-2문장으로 간결하게 말하세요.
+- 불만이나 문제 상황을 명확히 전달하세요.
+```
+
+#### 3-2. 대화형 고객 응답 생성
+
+```typescript
+generationConfig: {
+  temperature: 0.8,  // 자연스러운 대화 변이
+  topK: 40,
+  topP: 0.95,
+  maxOutputTokens: 150,
+}
+```
+
+---
+
+### 4. 상담 응대 분석 및 피드백
+
+**파일**: `src/services/google-cloud.ts`
+
+**평가 항목**:
+- `empathy` (공감력): 0-100점
+- `problemSolving` (문제해결): 0-100점
+- `professionalism` (전문성): 0-100점
+- `tone` (어조): 0-100점
+- `overallScore` (종합점수): 0-100점
+
+```typescript
+generationConfig: {
+  temperature: 0.7,  // 일관성 있는 평가를 위해 낮게
+  topK: 40,
+  topP: 0.95,
+  maxOutputTokens: 1024,
+}
+```
+
+**프롬프트 구조**:
+```
+당신은 고객 서비스 교육 전문가입니다. 다음 시나리오에서 상담원의 응대를 분석하고 피드백을 제공해주세요.
+
+시나리오 컨텍스트: ${scenarioContext}
+전체 대화 내용: ${conversationText}
+
+다음 JSON 형식으로 피드백을 제공해주세요:
+{
+  "empathy": 0-100 점수,
+  "problemSolving": 0-100 점수,
+  ...
+}
+```
+
+---
+
+### 5. AI 자동 퀴즈 출제
+
+**파일**: `src/services/quiz.ts`
+
+**핵심 설정**:
+```typescript
+generationConfig: {
+  temperature: 0.5,  // 정확성이 중요하므로 낮게 설정
+  response_mime_type: "application/json"  // JSON 응답 강제
+}
+```
+
+**난이도별 프롬프트**:
+```typescript
+const difficultyDescription = {
+  easy: '기본적인 내용을 묻는 쉬운 문제로 출제해주세요. 학습 자료를 한 번 읽으면 답할 수 있는 수준입니다.',
+  medium: '학습 자료를 꼼꼼히 읽고 이해했다면 풀 수 있는 보통 난이도의 문제로 출제해주세요.',
+  hard: '학습 자료를 깊이 이해하고 응용할 수 있어야 풀 수 있는 어려운 문제로 출제해주세요.'
+}
+```
+
+**커스터마이징 옵션**:
+- `total_questions`: 총 문항 수
+- `multiple_choice_count`: 4지선다 개수
+- `true_false_count`: OX 문제 개수
+- `required_topics`: 필수 포함 키워드
+- `ai_prompt`: 커스텀 출제 지침
+
+---
+
+### 6. 퀴즈 결과 AI 피드백 생성
+
+**파일**: `src/services/quizFeedback.ts`
+
+```typescript
+generationConfig: {
+  temperature: 0.8,
+  topK: 40,
+  topP: 0.95,
+  maxOutputTokens: 4096,  // 상세한 분석을 위해 높게
+  responseMimeType: 'application/json',
+}
+```
+
+**프롬프트 구조** (약 150줄):
+1. 시험 결과 요약 (점수, 정답률, 오답 수)
+2. 틀린 문제 상세 (각 문제의 해설 포함)
+3. 피드백 작성 가이드 (최소 글자 수 지정)
+4. JSON 출력 형식 정의
+
+**정확도 향상 기법**:
+- 각 필드별 최소 글자 수 강제 (예: `whyWrong` 최소 80자)
+- 구체적인 예시와 실무 적용 요구
+- 추상적 표현 금지 명시
+- 구조화된 JSON 스키마 제공
+
+---
+
+### Temperature 설정 요약
+
+| 기능 | Temperature | 이유 |
+|------|-------------|------|
+| 초기 고객 메시지 | 0.9 | 다양한 표현 유도 |
+| 대화형 응답 | 0.8 | 자연스러운 변이 |
+| 응대 분석 | 0.7 | 일관된 평가 |
+| 피드백 생성 | 0.8 | 상세하고 창의적 분석 |
+| 퀴즈 출제 | 0.5 | 정확성 우선 |
+
+---
+
+### 에러 핸들링 및 안정성
+
+**파일**: `src/services/google-cloud.ts`
+
+| 기법 | 설명 |
+|------|------|
+| **withRetry** | 최대 3회 재시도, 지수 백오프 (1s × attempt) |
+| **handleApiError** | 네트워크/할당량/인증 오류 구분 처리 |
+| **할당량 초과 감지** | quota, billing 오류 시 즉시 중단 |
+| **인증 오류 처리** | permission, unauthorized 시 재시도 안함 |
+| **JSON 파싱 검증** | 마크다운 코드 블록 제거 후 파싱 |
+
+---
+
+### 정확도 향상을 위한 핵심 전략
+
+1. **JSON 응답 강제**: `response_mime_type: 'application/json'` 또는 프롬프트에 "JSON만 응답" 명시
+2. **구조화된 프롬프트**: 섹션별로 명확히 구분 (━━━ 구분선 활용)
+3. **최소 글자 수 강제**: "최소 150자 이상" 등 구체적 요구
+4. **네거티브 프롬프팅**: "추상적 표현 금지", "독백 금지" 등
+5. **예시 제공**: 원하는 출력 형태의 예시 포함
+6. **데이터 검증**: 파싱 후 타입/필드 검증 로직 추가
+7. **재시도 로직**: 일시적 오류 대응
 
 ---
 
