@@ -12,6 +12,20 @@ export default function EmailVerification({ email, onVerified, onBack }: EmailVe
   const [resending, setResending] = useState(false)
   const [resendSuccess, setResendSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const emailDomain = email.split('@')[1]?.toLowerCase() || ''
+  const inboxUrlByDomain: Record<string, string> = {
+    'gmail.com': 'https://mail.google.com',
+    'googlemail.com': 'https://mail.google.com',
+    'naver.com': 'https://mail.naver.com',
+    'daum.net': 'https://mail.daum.net',
+    'hanmail.net': 'https://mail.daum.net',
+    'kakao.com': 'https://mail.kakao.com',
+    'outlook.com': 'https://outlook.live.com/mail',
+    'hotmail.com': 'https://outlook.live.com/mail',
+    'msn.com': 'https://outlook.live.com/mail',
+    'icloud.com': 'https://www.icloud.com/mail',
+  }
+  const inboxUrl = inboxUrlByDomain[emailDomain] || 'https://mail.google.com'
 
   // 이메일 인증 완료 감지
   useEffect(() => {
@@ -74,90 +88,108 @@ export default function EmailVerification({ email, onVerified, onBack }: EmailVe
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-        <div className="text-center mb-8">
-          <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 mb-4">
-            <svg
-              className="h-8 w-8 text-blue-600"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-              />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">이메일 인증이 필요합니다</h1>
-          <p className="text-gray-600">
-            <span className="font-semibold text-gray-900">{email}</span>로 인증 메일을 전송했습니다.
-          </p>
-        </div>
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-100 via-sky-50 to-white px-4 py-8">
+      <div className="pointer-events-none absolute -left-20 -top-24 h-72 w-72 rounded-full bg-sky-200/50 blur-3xl" />
+      <div className="pointer-events-none absolute -right-16 top-24 h-64 w-64 rounded-full bg-blue-200/40 blur-3xl" />
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <div className="flex items-start">
-            <div className="flex-shrink-0">
+      <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-lg items-center">
+        <div className="w-full rounded-2xl border border-white/70 bg-white/95 p-6 shadow-2xl shadow-sky-100 backdrop-blur-sm sm:p-8">
+          <div className="mb-8 text-center">
+            <span className="mb-3 inline-flex rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold tracking-wide text-sky-700">
+              EMAIL VERIFICATION
+            </span>
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-sky-500 shadow-lg shadow-sky-200/80">
               <svg
-                className="h-5 w-5 text-blue-600 mt-0.5"
-                fill="currentColor"
-                viewBox="0 0 20 20"
+                className="h-8 w-8 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
               >
                 <path
-                  fillRule="evenodd"
-                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                  clipRule="evenodd"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
                 />
               </svg>
             </div>
-            <div className="ml-3 flex-1">
-              <h3 className="text-sm font-medium text-blue-800 mb-1">다음 단계</h3>
-              <div className="text-sm text-blue-700 space-y-1">
-                <p>1. 이메일 받은편지함을 확인하세요</p>
-                <p>2. 인증 링크를 클릭하세요</p>
-                <p>3. 인증 완료 후 이 페이지로 돌아와서 계속하세요</p>
-              </div>
+            <h1 className="mb-2 text-2xl font-bold text-slate-900">이메일 인증이 필요합니다</h1>
+            <p className="text-sm leading-relaxed text-slate-600">
+              가입을 완료하려면 인증 메일의 링크를 눌러주세요.
+            </p>
+            <div className="mt-4 inline-flex max-w-full items-center rounded-xl border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-800">
+              <span className="truncate">{email}</span>
             </div>
           </div>
-        </div>
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-            {error}
+          <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+            <p className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
+              <span className="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-500" />
+              인증 완료 시 자동으로 로그인됩니다
+            </p>
           </div>
-        )}
 
-        {resendSuccess && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-            인증 메일을 다시 전송했습니다. 받은편지함을 확인하세요.
+          <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <h3 className="mb-3 text-sm font-semibold text-slate-800">다음 단계를 진행하세요</h3>
+            <div className="space-y-2">
+              {[
+                '받은편지함 또는 스팸함에서 인증 메일을 확인하세요',
+                '메일 안의 "이메일 인증" 링크를 클릭하세요',
+                '이 페이지로 돌아오면 자동으로 다음 화면으로 이동합니다',
+              ].map((step, index) => (
+                <div key={step} className="flex items-start gap-3 text-sm text-slate-700">
+                  <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-slate-600 shadow-sm ring-1 ring-slate-200">
+                    {index + 1}
+                  </span>
+                  <span>{step}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        )}
 
-        <div className="space-y-3">
-          <button
-            onClick={handleResendEmail}
-            disabled={resending}
-            className="w-full py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {resending ? '전송 중...' : '인증 메일 다시 보내기'}
-          </button>
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              {error}
+            </div>
+          )}
 
-          <button
-            onClick={onBack}
-            className="w-full py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold"
-          >
-            로그인으로 돌아가기
-          </button>
+          {resendSuccess && (
+            <div className="mb-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+              인증 메일을 다시 전송했습니다. 받은편지함을 확인해 주세요.
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <a
+              href={inboxUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              메일함 열기
+            </a>
+
+            <button
+              onClick={handleResendEmail}
+              disabled={resending}
+              className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-sky-500 px-4 py-3 text-sm font-semibold text-white transition hover:from-blue-600 hover:to-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {resending ? '전송 중...' : '인증 메일 다시 보내기'}
+            </button>
+
+            <button
+              onClick={onBack}
+              className="w-full rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
+            >
+              로그인으로 돌아가기
+            </button>
+          </div>
+
+          <p className="mt-6 text-center text-xs text-slate-500">
+            메일이 도착하지 않으면 몇 분 후 다시 시도해 주세요.
+          </p>
         </div>
-
-        <p className="mt-6 text-xs text-gray-500 text-center">
-          인증 메일이 보이지 않나요? 스팸 폴더도 확인해보세요.
-        </p>
       </div>
     </div>
   )
 }
-
